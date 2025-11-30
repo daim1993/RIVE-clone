@@ -41,25 +41,28 @@ const Timeline = ({
     }, [isDraggingPlayhead, duration]);
 
     const handleAddKeyframe = () => {
-        if (!selection) return;
-        const selectedShape = shapes.find(s => s.id === selection);
-        if (!selectedShape) return;
+        if (!selection || selection.length === 0) return;
 
-        addKeyframe({
-            shapeId: selection,
-            time: currentTime,
-            properties: {
-                x: selectedShape.x,
-                y: selectedShape.y,
-                width: selectedShape.width,
-                height: selectedShape.height,
-                rotation: selectedShape.rotation || 0,
-                opacity: selectedShape.opacity || 1
-            }
+        selection.forEach(selId => {
+            const selectedShape = shapes.find(s => s.id === selId);
+            if (!selectedShape) return;
+
+            addKeyframe({
+                shapeId: selId,
+                time: currentTime,
+                properties: {
+                    x: selectedShape.x,
+                    y: selectedShape.y,
+                    width: selectedShape.width,
+                    height: selectedShape.height,
+                    rotation: selectedShape.rotation || 0,
+                    opacity: selectedShape.opacity || 1
+                }
+            });
         });
     };
 
-    const selectedShape = shapes.find(s => s.id === selection);
+    const hasSelection = selection && selection.length > 0;
 
     return (
         <div className="timeline">
@@ -116,7 +119,7 @@ const Timeline = ({
                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>sec</span>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    {selectedShape && (
+                    {hasSelection && (
                         <button
                             className="btn"
                             onClick={handleAddKeyframe}
@@ -164,8 +167,9 @@ const Timeline = ({
                 </div>
                 {shapes.map(shape => {
                     const shapeKeyframes = keyframes.filter(kf => kf.shapeId === shape.id);
+                    const isSelected = selection.includes(shape.id);
                     return (
-                        <div key={shape.id} className="track">
+                        <div key={shape.id} className="track" style={{ backgroundColor: isSelected ? 'var(--bg-panel-hover)' : 'transparent' }}>
                             <div className="track-label">{shape.name}</div>
                             <div className="track-content">
                                 {shapeKeyframes.map((kf, idx) => (

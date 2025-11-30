@@ -2,7 +2,8 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     const [isDragging, setIsDragging] = React.useState(false);
     const [isResizing, setIsResizing] = React.useState(false);
     const [isRotating, setIsRotating] = React.useState(false);
-    const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
+    const [dragInfo, setDragInfo] = React.useState(null); // { startX, startY, originalX, originalY }
+    const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 }); // Keep for other tools like pen/resize for now
     const [resizeHandle, setResizeHandle] = React.useState(null);
     const [pathPoints, setPathPoints] = React.useState([]);
     const [isDrawing, setIsDrawing] = React.useState(false);
@@ -14,7 +15,92 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     const [draggedHandleType, setDraggedHandleType] = React.useState(null); // 'in' or 'out'
     const [artboardOffset, setArtboardOffset] = React.useState({ x: 0, y: 0 });
     const [isDraggingArtboard, setIsDraggingArtboard] = React.useState(false);
+    const [draggedShapeId, setDraggedShapeId] = React.useState(null);
     const canvasRef = React.useRef(null);
+    const containerRef = React.useRef(null);
+
+    // Center artboard on mount
+    React.useEffect(() => {
+        if (containerRef.current) {
+            const { width, height } = containerRef.current.getBoundingClientRect();
+            setArtboardOffset({
+                x: (width - canvasSize.width) / 2,
+                y: (height - canvasSize.height) / 2
+            });
+        }
+    }, []);
+
+    const snapToGuides = (x, y, width, height, excludeId) => {
+        const SNAP_THRESHOLD = 5;
+        const guides = [];
+        let newX = x;
+        let newY = y;
+
+        // Edges to check: [value, type]
+        // type: 0=start, 1=center, 2=end
+        const horizontalTargets = [];
+        const verticalTargets = [];
+
+        // Add canvas center
+        horizontalTargets.push({ value: canvasSize.width / 2, type: 1 });
+        verticalTargets.push({ value: canvasSize.height / 2, type: 1 });
+
+        // Add other shapes
+        shapes.forEach(shape => {
+            if (shape.id === excludeId) return;
+            horizontalTargets.push({ value: shape.x, type: 0 });
+            horizontalTargets.push({ value: shape.x + shape.width / 2, type: 1 });
+            horizontalTargets.push({ value: shape.x + shape.width, type: 2 });
+
+            verticalTargets.push({ value: shape.y, type: 0 });
+            verticalTargets.push({ value: shape.y + shape.height / 2, type: 1 });
+            verticalTargets.push({ value: shape.y + shape.height, type: 2 });
+        });
+
+        // Check horizontal snaps (vertical lines)
+        // Edges of current shape: left, center, right
+        const myHorizontals = [
+            { value: x, offset: 0 },
+            { value: x + width / 2, offset: width / 2 },
+            { value: x + width, offset: width }
+        ];
+
+        let snappedX = false;
+        for (const myH of myHorizontals) {
+            if (snappedX) break;
+            for (const target of horizontalTargets) {
+                if (Math.abs(myH.value - target.value) < SNAP_THRESHOLD) {
+                    newX = target.value - myH.offset;
+                    guides.push({ type: 'vertical', x: target.value, y1: 0, y2: canvasSize.height });
+                    snappedX = true;
+                    break;
+                }
+            }
+        }
+
+        // Check vertical snaps (horizontal lines)
+        const myVerticals = [
+            { value: y, offset: 0 },
+            { value: y + height / 2, offset: height / 2 },
+            { value: y + height, offset: height }
+        ];
+
+        let snappedY = false;
+        for (const myV of myVerticals) {
+            if (snappedY) break;
+            for (const target of verticalTargets) {
+                if (Math.abs(myV.value - target.value) < SNAP_THRESHOLD) {
+                    newY = target.value - myV.offset;
+                    guides.push({ type: 'horizontal', y: target.value, x1: 0, x2: canvasSize.width });
+                    snappedY = true;
+                    break;
+                }
+            }
+        }
+
+        setSmartGuides(guides);
+        return { x: newX, y: newY };
+    };
 
     const getCanvasCoords = (e) => {
         const rect = canvasRef.current.getBoundingClientRect();
@@ -138,7 +224,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             setIsDragging(true);
             setDragStart(coords);
         } else if (tool === 'select') {
-            setSelection(null);
+            setSelection([]);
             setIsEditingPath(false);
         } else if (tool === 'artboard') {
             // Artboard resize start
@@ -154,9 +240,44 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     const handleShapeMouseDown = (e, shapeId) => {
         e.stopPropagation();
         if (tool === 'artboard') return;
-        setSelection(shapeId);
+
+        let newSelection = [...selection];
+        if (e.shiftKey) {
+            if (newSelection.includes(shapeId)) {
+                newSelection = newSelection.filter(id => id !== shapeId);
+            } else {
+                newSelection.push(shapeId);
+            }
+            setSelection(newSelection);
+        } else {
+            if (!newSelection.includes(shapeId)) {
+                setSelection([shapeId]);
+            }
+        }
+
         setIsDragging(true);
+        setDraggedShapeId(shapeId);
+
         const coords = getCanvasCoords(e);
+        const shape = shapes.find(s => s.id === shapeId);
+
+        // Store initial positions for ALL selected shapes to prevent drift
+        // If the clicked shape wasn't selected (and no shift), it is now the only selection
+        const currentSelection = e.shiftKey ? newSelection : (newSelection.includes(shapeId) ? newSelection : [shapeId]);
+
+        const initialPositions = {};
+        currentSelection.forEach(id => {
+            const s = shapes.find(item => item.id === id);
+            if (s) {
+                initialPositions[id] = { x: s.x, y: s.y };
+            }
+        });
+
+        setDragInfo({
+            startX: coords.x,
+            startY: coords.y,
+            initialPositions: initialPositions
+        });
         setDragStart(coords);
     };
 
@@ -210,14 +331,14 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         if (shape.type === 'path') {
             setIsEditingPath(true);
             setEditingPathPoints(shape.pathPoints || []);
-            setSelection(shapeId);
+            setSelection([shapeId]);
         } else if (shape.type === 'rect' || shape.type === 'ellipse') {
             // Convert to path
             const points = convertToPath(shape);
             if (points) {
                 setIsEditingPath(true);
                 setEditingPathPoints(points);
-                setSelection(shapeId);
+                setSelection([shapeId]);
             }
         }
     };
@@ -278,9 +399,9 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             return;
         }
 
-        if (!selection) return;
+        if (!selection || selection.length === 0) return;
 
-        const selectedShape = shapes.find(s => s.id === selection);
+        const selectedShape = shapes.find(s => s.id === (draggedShapeId || selection[0]));
         if (!selectedShape) return;
 
         // Path point editing
@@ -310,22 +431,53 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 return `C ${prev.x + prev.hx} ${prev.y + prev.hy} ${p.x - p.hx} ${p.y - p.hy} ${p.x} ${p.y}`;
             }).join(' ');
 
-            updateShape(selection, {
+            updateShape(selectedShape.id, {
                 pathPoints: newPoints,
                 pathData: selectedShape.fill !== 'none' ? pathData + ' Z' : pathData
             });
             return;
         }
 
-        if (isDragging && !isEditingPath) {
-            const newX = selectedShape.x + dx;
-            const newY = selectedShape.y + dy;
+        if (isDragging && !isEditingPath && dragInfo && dragInfo.initialPositions) {
+            const dx = coords.x - dragInfo.startX;
+            const dy = coords.y - dragInfo.startY;
 
-            updateShape(selection, {
-                x: newX,
-                y: newY
+            // Calculate new position for the "leader" shape (the one being dragged)
+            // to determine snapping
+            const leaderId = draggedShapeId || selection[0];
+            const leaderInitial = dragInfo.initialPositions[leaderId];
+
+            if (!leaderInitial) return;
+
+            let newLeaderX = leaderInitial.x + dx;
+            let newLeaderY = leaderInitial.y + dy;
+
+            // Apply snapping for the leader
+            const leaderShape = shapes.find(s => s.id === leaderId);
+            const snapped = snapToGuides(
+                newLeaderX,
+                newLeaderY,
+                leaderShape.width || 0,
+                leaderShape.height || 0,
+                leaderId
+            );
+
+            // Calculate the ACTUAL delta applied after snapping
+            const snappedDx = snapped.x - leaderInitial.x;
+            const snappedDy = snapped.y - leaderInitial.y;
+
+            // Apply this snapped delta to ALL selected shapes
+            selection.forEach(id => {
+                const initial = dragInfo.initialPositions[id];
+                if (initial) {
+                    updateShape(id, {
+                        x: initial.x + snappedDx,
+                        y: initial.y + snappedDy
+                    });
+                }
             });
-            setDragStart(coords);
+
+            // Do NOT update dragInfo here to prevent drift
         } else if (isResizing && resizeHandle) {
             const newProps = { ...selectedShape };
             switch (resizeHandle) {
@@ -335,7 +487,9 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 case 'se': newProps.width += dx; newProps.height += dy; break;
             }
             if (newProps.width > 10 && newProps.height > 10) {
-                updateShape(selection, newProps);
+            }
+            if (newProps.width > 10 && newProps.height > 10) {
+                updateShape(selectedShape.id, newProps);
                 setDragStart(coords);
             }
         } else if (isRotating) {
@@ -346,7 +500,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             if (e.shiftKey) {
                 finalAngle = Math.round(finalAngle / 45) * 45;
             }
-            updateShape(selection, { rotation: finalAngle + 90 });
+            updateShape(selectedShape.id, { rotation: finalAngle + 90 });
         }
     };
 
@@ -365,7 +519,9 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         setSmartGuides([]);
         setDraggedPointIndex(null);
         setDraggedHandleType(null);
+        setDraggedShapeId(null);
         setIsDraggingArtboard(false);
+        setDragInfo(null);
     };
 
     React.useEffect(() => {
@@ -379,7 +535,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         }
     }, [isDragging, isResizing, isRotating, dragStart, selection, tool, canvasSize]);
 
-    const selectedShape = shapes.find(s => s.id === selection);
+    const selectedShape = selection.length > 0 ? shapes.find(s => s.id === selection[0]) : null;
     const tree = buildTree(shapes);
 
     const renderBoundingBox = (shape) => {
@@ -441,7 +597,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     };
 
     const renderShapeRecursiveWithSelection = (shape) => {
-        const isSelected = selection === shape.id;
+        const isSelected = selection.includes(shape.id);
         const rotation = shape.rotation || 0;
 
         const transform = `translate(${shape.x}, ${shape.y}) rotate(${rotation} ${(shape.width || 0) / 2} ${(shape.height || 0) / 2}) scale(${shape.scaleX || 1}, ${shape.scaleY || 1})`;
@@ -550,7 +706,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     };
 
     return (
-        <div className="canvas-area" onMouseDown={handleCanvasMouseDown} onDoubleClick={handleCanvasDoubleClick}>
+        <div className="canvas-area" ref={containerRef} onMouseDown={handleCanvasMouseDown} onDoubleClick={handleCanvasDoubleClick}>
             <div
                 className="artboard"
                 style={{
@@ -588,6 +744,22 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                             ))}
                         </g>
                     )}
+                </svg>
+
+                {/* Smart Guides Overlay */}
+                <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', overflow: 'visible' }}>
+                    {smartGuides.map((guide, i) => (
+                        <line
+                            key={i}
+                            x1={guide.type === 'vertical' ? guide.x : guide.x1}
+                            y1={guide.type === 'vertical' ? guide.y1 : guide.y}
+                            x2={guide.type === 'vertical' ? guide.x : guide.x2}
+                            y2={guide.type === 'vertical' ? guide.y2 : guide.y}
+                            stroke="#ef4444"
+                            strokeWidth="1"
+                            strokeDasharray="4 2"
+                        />
+                    ))}
                 </svg>
 
                 {/* Artboard Controls */}

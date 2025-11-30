@@ -5,7 +5,7 @@ const App = () => {
         { id: 1, type: 'rect', x: 100, y: 100, width: 100, height: 100, fill: '#6366f1', stroke: '#ffffff', strokeWidth: 2, opacity: 1, blendMode: 'normal', name: 'Rectangle 1' },
         { id: 2, type: 'ellipse', x: 300, y: 200, width: 100, height: 100, fill: '#ec4899', stroke: '#ffffff', strokeWidth: 2, opacity: 1, blendMode: 'normal', name: 'Circle 1' }
     ]);
-    const [selection, setSelection] = useState(null);
+    const [selection, setSelection] = useState([]); // Array of IDs
     const [tool, setTool] = useState('select');
     const [mode, setMode] = useState('design');
     const [isPlaying, setIsPlaying] = useState(false);
@@ -94,15 +94,22 @@ const App = () => {
         const handleKeyDown = (e) => {
             // Delete
             if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (selection) {
-                    const newShapes = shapes.filter(s => s.id !== selection);
+                if (selection.length > 0) {
+                    const newShapes = shapes.filter(s => !selection.includes(s.id));
                     setShapes(newShapes);
-                    setSelection(null);
+                    setSelection([]);
                     recordHistory(newShapes, animations);
                 }
             }
             // Shortcuts
             if (e.ctrlKey || e.metaKey) {
+                // Inverse Selection (Ctrl+I)
+                if (e.key === 'i') {
+                    e.preventDefault();
+                    const allIds = shapes.map(s => s.id);
+                    const newSelection = allIds.filter(id => !selection.includes(id));
+                    setSelection(newSelection);
+                }
                 // Undo/Redo
                 if (e.key === 'z') {
                     e.preventDefault();
@@ -112,15 +119,33 @@ const App = () => {
                 // Copy
                 if (e.key === 'c') {
                     e.preventDefault();
-                    if (selection) {
-                        const shape = shapes.find(s => s.id === selection);
-                        setClipboard(shape);
+                    if (selection.length > 0) {
+                        const selectedShapes = shapes.filter(s => selection.includes(s.id));
+                        setClipboard(selectedShapes);
                     }
                 }
                 // Paste
                 if (e.key === 'v') {
                     e.preventDefault();
-                    if (clipboard) {
+                    if (clipboard && Array.isArray(clipboard)) {
+                        const newShapes = [...shapes];
+                        const newSelection = [];
+                        clipboard.forEach(item => {
+                            const newShape = {
+                                ...item,
+                                id: Date.now() + Math.random(), // Ensure unique ID
+                                x: item.x + 20,
+                                y: item.y + 20,
+                                name: item.name + ' Copy'
+                            };
+                            newShapes.push(newShape);
+                            newSelection.push(newShape.id);
+                        });
+                        setShapes(newShapes);
+                        setSelection(newSelection);
+                        recordHistory(newShapes, animations);
+                    } else if (clipboard) {
+                        // Legacy single item support
                         const newShape = {
                             ...clipboard,
                             id: Date.now(),
@@ -130,7 +155,7 @@ const App = () => {
                         };
                         const newShapes = [...shapes, newShape];
                         setShapes(newShapes);
-                        setSelection(newShape.id);
+                        setSelection([newShape.id]);
                         recordHistory(newShapes, animations);
                     }
                 }
@@ -194,13 +219,22 @@ const App = () => {
         const newShape = { ...shape, id: Date.now() };
         const newShapes = [...shapes, newShape];
         setShapes(newShapes);
-        setSelection(newShape.id);
+        setSelection([newShape.id]);
         setTool('select');
         recordHistory(newShapes, animations);
     };
 
     const updateShape = (id, newProps) => {
         setShapes(shapes.map(s => s.id === id ? { ...s, ...newProps } : s));
+    };
+
+    const updateShapes = (updates) => {
+        // updates: array of { id, props }
+        const newShapes = shapes.map(s => {
+            const update = updates.find(u => u.id === s.id);
+            return update ? { ...s, ...update.props } : s;
+        });
+        setShapes(newShapes);
     };
 
     const addKeyframe = (keyframe) => {
@@ -312,7 +346,7 @@ const App = () => {
     const handleNew = () => {
         if (confirm('Create a new project? This will clear your current work.')) {
             setShapes([]);
-            setSelection(null);
+            setSelection([]);
             setAnimations([{ id: 1, name: 'Idle', duration: 5000, keyframes: [] }]);
             setActiveAnimationId(1);
             setCurrentTime(0);
@@ -337,7 +371,7 @@ const App = () => {
                 if (data.shapes) setShapes(data.shapes);
                 if (data.animations) setAnimations(data.animations);
                 if (data.mode) setMode(data.mode);
-                setSelection(null);
+                setSelection([]);
                 setCurrentTime(0);
                 recordHistory(data.shapes || [], data.animations || []);
             } catch (error) {
@@ -361,22 +395,24 @@ const App = () => {
     // Keyboard shortcuts
     useEffect(() => {
         const handleKeyPress = (e) => {
-            if (e.key === 'k' && selection && mode === 'animate') {
-                const selectedShape = shapes.find(s => s.id === selection);
-                if (selectedShape) {
-                    addKeyframe({
-                        shapeId: selection,
-                        time: currentTime,
-                        properties: {
-                            x: selectedShape.x,
-                            y: selectedShape.y,
-                            width: selectedShape.width,
-                            height: selectedShape.height,
-                            rotation: selectedShape.rotation || 0,
-                            opacity: selectedShape.opacity || 1
-                        }
-                    });
-                }
+            if (e.key === 'k' && selection.length > 0 && mode === 'animate') {
+                selection.forEach(selId => {
+                    const selectedShape = shapes.find(s => s.id === selId);
+                    if (selectedShape) {
+                        addKeyframe({
+                            shapeId: selId,
+                            time: currentTime,
+                            properties: {
+                                x: selectedShape.x,
+                                y: selectedShape.y,
+                                width: selectedShape.width,
+                                height: selectedShape.height,
+                                rotation: selectedShape.rotation || 0,
+                                opacity: selectedShape.opacity || 1
+                            }
+                        });
+                    }
+                });
             }
         };
 
@@ -827,6 +863,7 @@ const App = () => {
                         tool={tool}
                         addShape={addShape}
                         updateShape={updateShape}
+                        updateShapes={updateShapes}
                         onUpdateEnd={() => recordHistory(shapes, animations)}
                         canvasSize={canvasSize}
                         setCanvasSize={setCanvasSize}
@@ -838,6 +875,8 @@ const App = () => {
                 selection={selection}
                 shapes={shapes}
                 updateShape={updateShape}
+                updateShapes={updateShapes}
+                canvasSize={canvasSize}
             />
 
             {

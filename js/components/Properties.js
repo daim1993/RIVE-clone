@@ -1,7 +1,8 @@
-const Properties = ({ selection, shapes, updateShape }) => {
-    const selectedShape = shapes.find(s => s.id === selection);
+const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }) => {
+    const selectedShapes = shapes.filter(s => selection.includes(s.id));
+    const firstShape = selectedShapes[0];
 
-    if (!selectedShape) {
+    if (selectedShapes.length === 0) {
         return (
             <div className="panel right-panel">
                 <div className="panel-header">Properties</div>
@@ -12,8 +13,109 @@ const Properties = ({ selection, shapes, updateShape }) => {
         );
     }
 
+    // Helper to get common value or "" if mixed
+    const getValue = (field) => {
+        if (selectedShapes.length === 0) return '';
+        const val = selectedShapes[0][field];
+        for (let i = 1; i < selectedShapes.length; i++) {
+            if (selectedShapes[i][field] !== val) return '';
+        }
+        return val;
+    };
+
     const handleChange = (field, value) => {
-        updateShape(selection, { [field]: value });
+        selectedShapes.forEach(shape => {
+            updateShape(shape.id, { [field]: value });
+        });
+    };
+
+    const handleAlign = (type) => {
+        if (!canvasSize) return;
+
+        // If single selection, align to artboard
+        if (selectedShapes.length === 1) {
+            const shape = selectedShapes[0];
+            const { width, height } = canvasSize;
+            const sWidth = shape.width || 0;
+            const sHeight = shape.height || 0;
+            let newProps = {};
+
+            switch (type) {
+                case 'left': newProps.x = 0; break;
+                case 'center-h': newProps.x = (width - sWidth) / 2; break;
+                case 'right': newProps.x = width - sWidth; break;
+                case 'top': newProps.y = 0; break;
+                case 'middle-v': newProps.y = (height - sHeight) / 2; break;
+                case 'bottom': newProps.y = height - sHeight; break;
+            }
+            updateShape(shape.id, newProps);
+        } else {
+            // Align to selection bounds
+            const bounds = selectedShapes.reduce((acc, s) => ({
+                minX: Math.min(acc.minX, s.x),
+                minY: Math.min(acc.minY, s.y),
+                maxX: Math.max(acc.maxX, s.x + (s.width || 0)),
+                maxY: Math.max(acc.maxY, s.y + (s.height || 0))
+            }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+
+            const updates = [];
+            selectedShapes.forEach(s => {
+                let newProps = {};
+                switch (type) {
+                    case 'left': newProps.x = bounds.minX; break;
+                    case 'center-h': newProps.x = bounds.minX + (bounds.maxX - bounds.minX) / 2 - (s.width || 0) / 2; break;
+                    case 'right': newProps.x = bounds.maxX - (s.width || 0); break;
+                    case 'top': newProps.y = bounds.minY; break;
+                    case 'middle-v': newProps.y = bounds.minY + (bounds.maxY - bounds.minY) / 2 - (s.height || 0) / 2; break;
+                    case 'bottom': newProps.y = bounds.maxY - (s.height || 0); break;
+                }
+                if (Object.keys(newProps).length > 0) {
+                    updates.push({ id: s.id, props: newProps });
+                }
+            });
+            if (updateShapes) updateShapes(updates);
+        }
+    };
+
+    const handleDistribute = (type) => {
+        if (selectedShapes.length < 3) return;
+
+        const updates = [];
+        if (type === 'horizontal') {
+            // Sort by x
+            const sorted = [...selectedShapes].sort((a, b) => a.x - b.x);
+            const first = sorted[0];
+            const last = sorted[sorted.length - 1];
+            const totalWidth = (last.x + (last.width || 0)) - first.x;
+            const totalShapeWidth = sorted.reduce((sum, s) => sum + (s.width || 0), 0);
+            const gap = (totalWidth - totalShapeWidth) / (sorted.length - 1);
+
+            // Distribute centers? Or gaps? Usually gaps.
+            // Let's distribute evenly between first and last
+            const startX = first.x;
+            const endX = last.x;
+            const span = endX - startX;
+            const step = span / (sorted.length - 1);
+
+            sorted.forEach((s, i) => {
+                if (i === 0 || i === sorted.length - 1) return; // Don't move first/last
+                updates.push({ id: s.id, props: { x: startX + (step * i) } });
+            });
+        } else if (type === 'vertical') {
+            const sorted = [...selectedShapes].sort((a, b) => a.y - b.y);
+            const first = sorted[0];
+            const last = sorted[sorted.length - 1];
+            const startY = first.y;
+            const endY = last.y;
+            const span = endY - startY;
+            const step = span / (sorted.length - 1);
+
+            sorted.forEach((s, i) => {
+                if (i === 0 || i === sorted.length - 1) return;
+                updates.push({ id: s.id, props: { y: startY + (step * i) } });
+            });
+        }
+        if (updateShapes) updateShapes(updates);
     };
 
     return (
@@ -21,55 +123,52 @@ const Properties = ({ selection, shapes, updateShape }) => {
             <div className="panel-header">Properties</div>
             <div className="panel-content">
                 <div className="property-group">
+                    <span className="property-label">Align</span>
+                    <div className="property-row" style={{ justifyContent: 'space-between' }}>
+                        <button className="btn" title="Align Left" onClick={() => handleAlign('left')} style={{ padding: '4px' }}><Icons.AlignStart /></button>
+                        <button className="btn" title="Align Center" onClick={() => handleAlign('center-h')} style={{ padding: '4px' }}><Icons.AlignCenterH /></button>
+                        <button className="btn" title="Align Right" onClick={() => handleAlign('right')} style={{ padding: '4px' }}><Icons.AlignEnd /></button>
+                        <div style={{ width: '1px', background: 'var(--border-color)', height: '24px', margin: '0 4px' }}></div>
+                        <button className="btn" title="Align Top" onClick={() => handleAlign('top')} style={{ padding: '4px' }}><Icons.AlignTopV /></button>
+                        <button className="btn" title="Align Middle" onClick={() => handleAlign('middle-v')} style={{ padding: '4px' }}><Icons.AlignMiddleV /></button>
+                        <button className="btn" title="Align Bottom" onClick={() => handleAlign('bottom')} style={{ padding: '4px' }}><Icons.AlignBottomV /></button>
+
+                        {selectedShapes.length > 2 && (
+                            <>
+                                <div style={{ width: '1px', background: 'var(--border-color)', height: '24px', margin: '0 4px' }}></div>
+                                <button className="btn" title="Distribute Horizontal" onClick={() => handleDistribute('horizontal')} style={{ padding: '4px' }}><Icons.DistributeHorizontal /></button>
+                                <button className="btn" title="Distribute Vertical" onClick={() => handleDistribute('vertical')} style={{ padding: '4px' }}><Icons.DistributeVertical /></button>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                <div className="property-group">
                     <span className="property-label">Transform</span>
                     <div className="property-row">
                         <div className="input-group">
                             <label>X</label>
-                            <input
-                                type="number"
-                                value={Math.round(selectedShape.x)}
-                                onChange={(e) => handleChange('x', Number(e.target.value))}
-                            />
+                            <input type="number" value={Math.round(getValue('x'))} onChange={(e) => handleChange('x', parseFloat(e.target.value))} />
                         </div>
                         <div className="input-group">
                             <label>Y</label>
-                            <input
-                                type="number"
-                                value={Math.round(selectedShape.y)}
-                                onChange={(e) => handleChange('y', Number(e.target.value))}
-                            />
+                            <input type="number" value={Math.round(getValue('y'))} onChange={(e) => handleChange('y', parseFloat(e.target.value))} />
                         </div>
                     </div>
-                    {selectedShape.type !== 'path' && (
-                        <>
-                            <div className="property-row">
-                                <div className="input-group">
-                                    <label>W</label>
-                                    <input
-                                        type="number"
-                                        value={Math.round(selectedShape.width)}
-                                        onChange={(e) => handleChange('width', Number(e.target.value))}
-                                    />
-                                </div>
-                                <div className="input-group">
-                                    <label>H</label>
-                                    <input
-                                        type="number"
-                                        value={Math.round(selectedShape.height)}
-                                        onChange={(e) => handleChange('height', Number(e.target.value))}
-                                    />
-                                </div>
-                            </div>
-                        </>
-                    )}
+                    <div className="property-row">
+                        <div className="input-group">
+                            <label>W</label>
+                            <input type="number" value={Math.round(getValue('width'))} onChange={(e) => handleChange('width', parseFloat(e.target.value))} />
+                        </div>
+                        <div className="input-group">
+                            <label>H</label>
+                            <input type="number" value={Math.round(getValue('height'))} onChange={(e) => handleChange('height', parseFloat(e.target.value))} />
+                        </div>
+                    </div>
                     <div className="property-row">
                         <div className="input-group">
                             <label>R</label>
-                            <input
-                                type="number"
-                                value={selectedShape.rotation || 0}
-                                onChange={(e) => handleChange('rotation', Number(e.target.value))}
-                            />
+                            <input type="number" value={Math.round(getValue('rotation') || 0)} onChange={(e) => handleChange('rotation', parseFloat(e.target.value))} />
                         </div>
                     </div>
                 </div>
@@ -79,63 +178,34 @@ const Properties = ({ selection, shapes, updateShape }) => {
                     <div className="property-row">
                         <div className="input-group">
                             <label>Fill</label>
-                            <input
-                                type="color"
-                                value={selectedShape.fill || '#ffffff'}
-                                onChange={(e) => handleChange('fill', e.target.value)}
-                                style={{ height: '24px', padding: 0, width: '100%' }}
-                            />
+                            <input type="color" value={getValue('fill') || '#000000'} onChange={(e) => handleChange('fill', e.target.value)} style={{ width: '24px', height: '24px', padding: 0, border: 'none' }} />
+                            <input type="text" value={getValue('fill')} onChange={(e) => handleChange('fill', e.target.value)} style={{ marginLeft: '8px' }} />
                         </div>
                     </div>
                     <div className="property-row">
                         <div className="input-group">
                             <label>Stroke</label>
-                            <input
-                                type="color"
-                                value={selectedShape.stroke || '#ffffff'}
-                                onChange={(e) => handleChange('stroke', e.target.value)}
-                                style={{ height: '24px', padding: 0, width: '100%' }}
-                            />
+                            <input type="color" value={getValue('stroke') || '#000000'} onChange={(e) => handleChange('stroke', e.target.value)} style={{ width: '24px', height: '24px', padding: 0, border: 'none' }} />
+                            <input type="text" value={getValue('stroke')} onChange={(e) => handleChange('stroke', e.target.value)} style={{ marginLeft: '8px' }} />
                         </div>
                     </div>
                     <div className="property-row">
-                        <div className="input-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                            <label style={{ marginBottom: '4px', width: 'auto' }}>Stroke Width: {selectedShape.strokeWidth || 0}px</label>
-                            <input
-                                type="number"
-                                value={selectedShape.strokeWidth || 0}
-                                onChange={(e) => handleChange('strokeWidth', Number(e.target.value))}
-                                min="0"
-                                style={{
-                                    width: '100%',
-                                    background: 'var(--bg-app)',
-                                    border: '1px solid var(--border-color)',
-                                    color: 'var(--text-primary)',
-                                    padding: '4px 8px',
-                                    borderRadius: '4px'
-                                }}
-                            />
+                        <div className="input-group">
+                            <label>Width</label>
+                            <input type="number" value={getValue('strokeWidth')} onChange={(e) => handleChange('strokeWidth', parseFloat(e.target.value))} />
                         </div>
                     </div>
                     <div className="property-row">
-                        <div className="input-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                            <label style={{ marginBottom: '4px', width: 'auto' }}>Opacity: {Math.round((selectedShape.opacity || 1) * 100)}%</label>
-                            <input
-                                type="range"
-                                value={selectedShape.opacity || 1}
-                                onChange={(e) => handleChange('opacity', Number(e.target.value))}
-                                min="0"
-                                max="1"
-                                step="0.01"
-                                style={{ width: '100%' }}
-                            />
+                        <div className="input-group">
+                            <label>Opacity</label>
+                            <input type="range" min="0" max="1" step="0.1" value={getValue('opacity') || 1} onChange={(e) => handleChange('opacity', parseFloat(e.target.value))} style={{ width: '100%' }} />
                         </div>
                     </div>
                     <div className="property-row">
                         <div className="input-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
                             <label style={{ marginBottom: '4px', width: 'auto' }}>Blend Mode</label>
                             <select
-                                value={selectedShape.blendMode || 'normal'}
+                                value={getValue('blendMode') || 'normal'}
                                 onChange={(e) => handleChange('blendMode', e.target.value)}
                                 style={{
                                     background: 'var(--bg-app)',
@@ -161,7 +231,7 @@ const Properties = ({ selection, shapes, updateShape }) => {
                         <div className="input-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
                             <label style={{ marginBottom: '4px', width: 'auto' }}>Mask</label>
                             <select
-                                value={selectedShape.maskId || ''}
+                                value={getValue('maskId') || ''}
                                 onChange={(e) => handleChange('maskId', e.target.value ? Number(e.target.value) : null)}
                                 style={{
                                     background: 'var(--bg-app)',
@@ -173,7 +243,7 @@ const Properties = ({ selection, shapes, updateShape }) => {
                                 }}
                             >
                                 <option value="">None</option>
-                                {shapes.filter(s => s.id !== selection).map(s => (
+                                {shapes.filter(s => !selection.includes(s.id)).map(s => (
                                     <option key={s.id} value={s.id}>{s.name}</option>
                                 ))}
                             </select>

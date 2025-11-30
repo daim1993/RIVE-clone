@@ -68,8 +68,33 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
         setDraggedId(null);
     };
 
+    const handleSelect = (e, id) => {
+        e.stopPropagation();
+
+        let newSelection = [...selection];
+        if (e.shiftKey) {
+            // Range select (simplified: just add to selection for now)
+            if (newSelection.includes(id)) {
+                newSelection = newSelection.filter(i => i !== id);
+            } else {
+                newSelection.push(id);
+            }
+        } else if (e.ctrlKey || e.metaKey) {
+            // Toggle
+            if (newSelection.includes(id)) {
+                newSelection = newSelection.filter(i => i !== id);
+            } else {
+                newSelection.push(id);
+            }
+        } else {
+            // Single select
+            newSelection = [id];
+        }
+        setSelection(newSelection);
+    };
+
     const renderTreeItem = (item, depth = 0) => {
-        const isSelected = selection === item.id;
+        const isSelected = selection.includes(item.id);
         const hasChildren = item.children && item.children.length > 0;
         const isExpanded = expanded[item.id];
         const isDragged = draggedId === item.id;
@@ -78,14 +103,14 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
             <div key={item.id} className="tree-node">
                 <div
                     className={`tree-item ${isSelected ? 'selected' : ''} ${isDragged ? 'dragged' : ''}`}
-                    onClick={() => setSelection(item.id)}
+                    onClick={(e) => handleSelect(e, item.id)}
                     draggable
                     onDragStart={(e) => handleDragStart(e, item.id)}
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, item.id)}
                 >
                     {/* Indentation and Toggle */}
-                    <div className="tree-item-content" style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }}>
+                    <div className="tree-item-content" style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', paddingLeft: depth * 12 }}>
 
                         {/* Toggle Arrow */}
                         <div
