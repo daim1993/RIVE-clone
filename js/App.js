@@ -410,6 +410,40 @@ const App = () => {
         setDraggedNode(animId);
     };
 
+    const handleReparent = (childId, parentId) => {
+        // Prevent circular dependency
+        let current = shapes.find(s => s.id === parentId);
+        while (current) {
+            if (current.id === childId) return; // Can't parent to self or descendant
+            current = shapes.find(s => s.id === current.parentId);
+        }
+
+        const newShapes = shapes.map(s => {
+            if (s.id === childId) {
+                return { ...s, parentId: parentId };
+            }
+            return s;
+        });
+        setShapes(newShapes);
+        recordHistory(newShapes, animations);
+    };
+
+    const handleAddGroup = () => {
+        const newGroup = {
+            id: Date.now(),
+            type: 'group',
+            name: `Group ${shapes.length + 1}`,
+            x: canvasSize.width / 2,
+            y: canvasSize.height / 2,
+            rotation: 0,
+            scaleX: 1,
+            scaleY: 1,
+            opacity: 1,
+            visible: true
+        };
+        addShape(newGroup);
+    };
+
     return (
         <div className="app-container" style={{
             gridTemplateRows: mode === 'animate' ? 'var(--header-height) 30px 1fr var(--timeline-height)' : 'var(--header-height) 30px 1fr 0px'
@@ -464,6 +498,8 @@ const App = () => {
                 shapes={shapes}
                 selection={selection}
                 setSelection={setSelection}
+                onReparent={handleReparent}
+                onAddGroup={handleAddGroup}
             />
 
             {
@@ -779,6 +815,7 @@ const App = () => {
                                 onUpdateEnd={() => recordHistory(shapes, animations)}
                                 canvasSize={{ width: 376, height: 300 }}
                                 compact={true}
+                                setCanvasSize={setCanvasSize}
                             />
                         </div>
                     </div>
@@ -792,6 +829,7 @@ const App = () => {
                         updateShape={updateShape}
                         onUpdateEnd={() => recordHistory(shapes, animations)}
                         canvasSize={canvasSize}
+                        setCanvasSize={setCanvasSize}
                     />
                 )
             }

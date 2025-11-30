@@ -7,6 +7,7 @@ const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG }) => {
         { id: 'rect', icon: Icons.Square },
         { id: 'ellipse', icon: Icons.Circle },
         { id: 'pen', icon: Icons.Pen },
+        { id: 'artboard', icon: Icons.Artboard },
     ];
 
     return (
