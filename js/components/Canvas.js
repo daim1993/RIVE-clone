@@ -405,8 +405,8 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         if (!selectedShape) return;
 
         // Path point editing
-        if (isEditingPath && draggedPointIndex !== null) {
-            const newPoints = [...(selectedShape.pathPoints || [])];
+        if (isEditingPath && draggedPointIndex !== null && dragInfo && dragInfo.initialPoints) {
+            const newPoints = dragInfo.initialPoints.map(p => ({ ...p }));
             const point = newPoints[draggedPointIndex];
 
             if (draggedHandleType === 'out') {
@@ -421,7 +421,6 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 // Dragging the point itself
                 point.x += dx;
                 point.y += dy;
-                setDragStart(coords);
             }
 
             // Rebuild path data
@@ -605,10 +604,66 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         return (
             <g key={shape.id} transform={transform}>
                 {/* Shape Content */}
-                {shape.type === 'rect' && <rect width={shape.width} height={shape.height} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
-                {shape.type === 'ellipse' && <ellipse cx={shape.width / 2} cy={shape.height / 2} rx={shape.width / 2} ry={shape.height / 2} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
-                {shape.type === 'path' && <path d={shape.pathData} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
-                {shape.type === 'image' && <image href={shape.imageData} width={shape.width} height={shape.height} opacity={shape.opacity} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
+                {shape.type === 'rect' && (() => {
+                    // Check if we have individual corner radii
+                    const hasTL = shape.cornerRadiusTL !== undefined && shape.cornerRadiusTL !== null;
+                    const hasTR = shape.cornerRadiusTR !== undefined && shape.cornerRadiusTR !== null;
+                    const hasBR = shape.cornerRadiusBR !== undefined && shape.cornerRadiusBR !== null;
+                    const hasBL = shape.cornerRadiusBL !== undefined && shape.cornerRadiusBL !== null;
+                    const hasIndividualCorners = hasTL || hasTR || hasBR || hasBL;
+
+                    if (!hasIndividualCorners) {
+                        // Use simple rect with uniform corner radius
+                        return <rect
+                            width={shape.width}
+                            height={shape.height}
+                            rx={shape.cornerRadius || 0}
+                            ry={shape.cornerRadius || 0}
+                            fill={shape.fill}
+                            stroke={shape.stroke}
+                            strokeWidth={shape.strokeWidth}
+                            opacity={shape.opacity}
+                            style={{ mixBlendMode: shape.blendMode }}
+                            onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
+                            onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)}
+                        />;
+                    }
+
+                    // Generate path with individual corner radii
+                    const w = shape.width;
+                    const h = shape.height;
+                    const rTL = Math.min(shape.cornerRadiusTL ?? shape.cornerRadius ?? 0, w / 2, h / 2);
+                    const rTR = Math.min(shape.cornerRadiusTR ?? shape.cornerRadius ?? 0, w / 2, h / 2);
+                    const rBR = Math.min(shape.cornerRadiusBR ?? shape.cornerRadius ?? 0, w / 2, h / 2);
+                    const rBL = Math.min(shape.cornerRadiusBL ?? shape.cornerRadius ?? 0, w / 2, h / 2);
+
+                    const pathData = `
+                        M ${rTL} 0
+                        L ${w - rTR} 0
+                        ${rTR > 0 ? `Q ${w} 0 ${w} ${rTR}` : ''}
+                        L ${w} ${h - rBR}
+                        ${rBR > 0 ? `Q ${w} ${h} ${w - rBR} ${h}` : ''}
+                        L ${rBL} ${h}
+                        ${rBL > 0 ? `Q 0 ${h} 0 ${h - rBL}` : ''}
+                        L 0 ${rTL}
+                        ${rTL > 0 ? `Q 0 0 ${rTL} 0` : ''}
+                        Z
+                    `.replace(/\s+/g, ' ').trim();
+
+                    return <path
+                        d={pathData}
+                        fill={shape.fill}
+                        stroke={shape.stroke}
+                        strokeWidth={shape.strokeWidth}
+                        opacity={shape.opacity}
+                        style={{ mixBlendMode: shape.blendMode }}
+                        onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
+                        onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)}
+                    />;
+                })()}
+                {shape.type === 'ellipse' && <ellipse cx={shape.width / 2} cy={shape.height / 2} rx={shape.width / 2} ry={shape.height / 2} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
+                {shape.type === 'path' && <path d={shape.pathData} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
+                {shape.type === 'image' && <image href={shape.imageData} width={shape.width} height={shape.height} opacity={shape.opacity} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
                 {shape.type === 'group' && <rect width={50} height={50} fill="none" stroke={isSelected ? "#6366f1" : "none"} strokeDasharray="2 2" onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} />}
 
                 {/* Children */}
@@ -618,9 +673,9 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 {isSelected && !isEditingPath && renderBoundingBox(shape)}
 
                 {/* Path Editing Points with Bezier Handles */}
-                {isSelected && isEditingPath && shape.type === 'path' && (
+                {isSelected && isEditingPath && (shape.type === 'path' || (isEditingPath && selection.includes(shape.id))) && (
                     <g>
-                        {shape.pathPoints && shape.pathPoints.map((p, i) => (
+                        {(shape.pathPoints || editingPathPoints).map((p, i) => (
                             <g key={i}>
                                 {/* Bezier handles */}
                                 {(p.hx !== 0 || p.hy !== 0) && (
@@ -648,34 +703,46 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                                         <circle
                                             cx={p.x + p.hx}
                                             cy={p.y + p.hy}
-                                            r="3"
+                                            r="4"
                                             fill="#10b981"
                                             stroke="#fff"
                                             strokeWidth="1"
                                             style={{ cursor: 'move', pointerEvents: 'auto' }}
                                             onMouseDown={(e) => {
                                                 e.stopPropagation();
+                                                setIsDragging(true);
                                                 setDraggedPointIndex(i);
                                                 setDraggedHandleType('out');
                                                 const coords = getCanvasCoords(e);
                                                 setDragStart(coords);
+                                                setDragInfo({
+                                                    startX: coords.x,
+                                                    startY: coords.y,
+                                                    initialPoints: JSON.parse(JSON.stringify(shape.pathPoints || editingPathPoints || []))
+                                                });
                                             }}
                                         />
                                         {/* Incoming handle */}
                                         <circle
                                             cx={p.x - p.hx}
                                             cy={p.y - p.hy}
-                                            r="3"
+                                            r="4"
                                             fill="#10b981"
                                             stroke="#fff"
                                             strokeWidth="1"
                                             style={{ cursor: 'move', pointerEvents: 'auto' }}
                                             onMouseDown={(e) => {
                                                 e.stopPropagation();
+                                                setIsDragging(true);
                                                 setDraggedPointIndex(i);
                                                 setDraggedHandleType('in');
                                                 const coords = getCanvasCoords(e);
                                                 setDragStart(coords);
+                                                setDragInfo({
+                                                    startX: coords.x,
+                                                    startY: coords.y,
+                                                    initialPoints: JSON.parse(JSON.stringify(shape.pathPoints || editingPathPoints || []))
+                                                });
                                             }}
                                         />
                                     </>
@@ -684,17 +751,23 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                                 <circle
                                     cx={p.x}
                                     cy={p.y}
-                                    r="5"
+                                    r="6"
                                     fill="#6366f1"
                                     stroke="#fff"
                                     strokeWidth="2"
                                     style={{ cursor: 'move', pointerEvents: 'auto' }}
                                     onMouseDown={(e) => {
                                         e.stopPropagation();
+                                        setIsDragging(true);
                                         setDraggedPointIndex(i);
                                         setDraggedHandleType(null);
                                         const coords = getCanvasCoords(e);
                                         setDragStart(coords);
+                                        setDragInfo({
+                                            startX: coords.x,
+                                            startY: coords.y,
+                                            initialPoints: JSON.parse(JSON.stringify(shape.pathPoints || editingPathPoints || []))
+                                        });
                                     }}
                                 />
                             </g>

@@ -1,3 +1,6 @@
+import React from 'react';
+import * as Icons from '../icons';
+
 const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }) => {
     const selectedShapes = shapes.filter(s => selection.includes(s.id));
     const firstShape = selectedShapes[0];
@@ -144,33 +147,149 @@ const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }
                 </div>
 
                 <div className="property-group">
-                    <span className="property-label">Transform</span>
-                    <div className="property-row">
-                        <div className="input-group">
-                            <label>X</label>
-                            <input type="number" value={Math.round(getValue('x'))} onChange={(e) => handleChange('x', parseFloat(e.target.value))} />
+                    <span className="property-label" style={{ marginBottom: '12px', display: 'block', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600 }}>{selectedShapes.length === 1 && selectedShapes[0].type === 'rect' ? 'Rectangle Path' : 'Transform'}</span>
+
+                    {/* Size Row */}
+                    <div className="property-row" style={{ marginBottom: '8px', alignItems: 'center' }}>
+                        <span style={{ width: '40px', color: 'var(--text-secondary)', fontSize: '12px' }}>Size</span>
+                        <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+                            <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'transparent', border: 'none', padding: 0 }}>
+                                <label style={{ color: 'var(--text-secondary)', marginRight: '8px' }}>W</label>
+                                <input
+                                    type="number"
+                                    value={Math.round(getValue('width'))}
+                                    onChange={(e) => handleChange('width', parseFloat(e.target.value))}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontWeight: 600, textAlign: 'left', width: '50px' }}
+                                />
+                            </div>
+                            <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'transparent', border: 'none', padding: 0 }}>
+                                <label style={{ color: 'var(--text-secondary)', marginRight: '8px' }}>H</label>
+                                <input
+                                    type="number"
+                                    value={Math.round(getValue('height'))}
+                                    onChange={(e) => handleChange('height', parseFloat(e.target.value))}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontWeight: 600, textAlign: 'left', width: '50px' }}
+                                />
+                            </div>
                         </div>
-                        <div className="input-group">
-                            <label>Y</label>
-                            <input type="number" value={Math.round(getValue('y'))} onChange={(e) => handleChange('y', parseFloat(e.target.value))} />
+                        <div style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}><Icons.Link /></div>
+                    </div>
+
+                    {/* Origin Row */}
+                    <div className="property-row" style={{ marginBottom: '8px', alignItems: 'center' }}>
+                        <span style={{ width: '40px', color: 'var(--text-secondary)', fontSize: '12px' }}>Origin</span>
+                        <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+                            <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'transparent', border: 'none', padding: 0 }}>
+                                <label style={{ color: 'var(--text-secondary)', marginRight: '8px' }}>X</label>
+                                <input
+                                    type="number"
+                                    value={Math.round(getValue('x'))}
+                                    onChange={(e) => handleChange('x', parseFloat(e.target.value))}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontWeight: 600, textAlign: 'left', width: '50px' }}
+                                />
+                            </div>
+                            <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'transparent', border: 'none', padding: 0 }}>
+                                <label style={{ color: 'var(--text-secondary)', marginRight: '8px' }}>Y</label>
+                                <input
+                                    type="number"
+                                    value={Math.round(getValue('y'))}
+                                    onChange={(e) => handleChange('y', parseFloat(e.target.value))}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontWeight: 600, textAlign: 'left', width: '50px' }}
+                                />
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+                            <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'transparent', border: 'none', padding: 0 }}>
+                                <label style={{ color: 'var(--text-secondary)', marginRight: '8px' }}>°</label>
+                                <input type="number" value={Math.round(getValue('rotation') || 0)} onChange={(e) => handleChange('rotation', parseFloat(e.target.value))}
+                                    style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontWeight: 600, textAlign: 'left', width: '50px' }} />
+                            </div>
                         </div>
                     </div>
-                    <div className="property-row">
-                        <div className="input-group">
-                            <label>W</label>
-                            <input type="number" value={Math.round(getValue('width'))} onChange={(e) => handleChange('width', parseFloat(e.target.value))} />
+
+                    {/* Corner Row (only for rects) */}
+                    {selectedShapes.every(s => s.type === 'rect') && (
+                        <div className="property-row" style={{ marginBottom: '8px', alignItems: 'flex-start', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', width: '100%', marginBottom: '8px' }}>
+                                <span style={{ width: '40px', color: 'var(--text-secondary)', fontSize: '12px' }}>Corner</span>
+                                <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+                                    <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'transparent', border: 'none', padding: 0 }}>
+                                        <div style={{ color: 'var(--text-secondary)', marginRight: '8px', display: 'flex', alignItems: 'center' }}><Icons.Corners /></div>
+                                        <input
+                                            type="number"
+                                            value={Math.round(getValue('cornerRadius') || 0)}
+                                            onChange={(e) => {
+                                                const val = parseFloat(e.target.value);
+                                                handleChange('cornerRadius', val);
+                                                // Set all corners to same value
+                                                handleChange('cornerRadiusTL', val);
+                                                handleChange('cornerRadiusTR', val);
+                                                handleChange('cornerRadiusBR', val);
+                                                handleChange('cornerRadiusBL', val);
+                                            }}
+                                            style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontWeight: 600, textAlign: 'left', width: '50px' }}
+                                        />
+                                    </div>
+                                </div>
+                                <div style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}><Icons.Link /></div>
+                            </div>
+
+                            {/* Individual corners in a 2x2 grid */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%', paddingLeft: '40px' }}>
+                                {/* Top-left */}
+                                <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'var(--bg-app)', border: '1px solid var(--border-color)', padding: '4px 8px', borderRadius: '4px' }}>
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginRight: '6px' }}>
+                                        <path d="M12 12V1a1 1 0 0 0-1-1H1" />
+                                    </svg>
+                                    <input
+                                        type="number"
+                                        value={Math.round(getValue('cornerRadiusTL') ?? getValue('cornerRadius') ?? 0)}
+                                        onChange={(e) => handleChange('cornerRadiusTL', parseFloat(e.target.value))}
+                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'left', width: '100%' }}
+                                    />
+                                </div>
+
+                                {/* Top-right */}
+                                <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'var(--bg-app)', border: '1px solid var(--border-color)', padding: '4px 8px', borderRadius: '4px' }}>
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginRight: '6px' }}>
+                                        <path d="M0 12V1a1 1 0 0 1 1-1h10" />
+                                    </svg>
+                                    <input
+                                        type="number"
+                                        value={Math.round(getValue('cornerRadiusTR') ?? getValue('cornerRadius') ?? 0)}
+                                        onChange={(e) => handleChange('cornerRadiusTR', parseFloat(e.target.value))}
+                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'left', width: '100%' }}
+                                    />
+                                </div>
+
+                                {/* Bottom-left */}
+                                <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'var(--bg-app)', border: '1px solid var(--border-color)', padding: '4px 8px', borderRadius: '4px' }}>
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginRight: '6px' }}>
+                                        <path d="M12 0v11a1 1 0 0 1-1 1H1" />
+                                    </svg>
+                                    <input
+                                        type="number"
+                                        value={Math.round(getValue('cornerRadiusBL') ?? getValue('cornerRadius') ?? 0)}
+                                        onChange={(e) => handleChange('cornerRadiusBL', parseFloat(e.target.value))}
+                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'left', width: '100%' }}
+                                    />
+                                </div>
+
+                                {/* Bottom-right */}
+                                <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', background: 'var(--bg-app)', border: '1px solid var(--border-color)', padding: '4px 8px', borderRadius: '4px' }}>
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginRight: '6px' }}>
+                                        <path d="M0 0v11a1 1 0 0 0 1 1h10" />
+                                    </svg>
+                                    <input
+                                        type="number"
+                                        value={Math.round(getValue('cornerRadiusBR') ?? getValue('cornerRadius') ?? 0)}
+                                        onChange={(e) => handleChange('cornerRadiusBR', parseFloat(e.target.value))}
+                                        style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', fontSize: '11px', textAlign: 'left', width: '100%' }}
+                                    />
+                                </div>
+                            </div>
                         </div>
-                        <div className="input-group">
-                            <label>H</label>
-                            <input type="number" value={Math.round(getValue('height'))} onChange={(e) => handleChange('height', parseFloat(e.target.value))} />
-                        </div>
-                    </div>
-                    <div className="property-row">
-                        <div className="input-group">
-                            <label>R</label>
-                            <input type="number" value={Math.round(getValue('rotation') || 0)} onChange={(e) => handleChange('rotation', parseFloat(e.target.value))} />
-                        </div>
-                    </div>
+                    )}
                 </div>
 
                 <div className="property-group">
@@ -250,7 +369,5 @@ const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    );
+                );
 };
