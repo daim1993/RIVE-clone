@@ -1,0 +1,1791 @@
+const { useState, useEffect, useRef } = React;
+
+// --- Icons ---
+const Icons = {
+    MousePointer: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 3 7.07 16.97 2.51-7.39 7.39-2.51L3 3z" /><path d="m13 13 6 6" /></svg>,
+    Square: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /></svg>,
+    Circle: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /></svg>,
+    Pen: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>,
+    Play: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3" /></svg>,
+    Pause: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>,
+    ChevronRight: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>,
+    Layers: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>,
+    Download: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" x2="12" y1="15" y2="3" /></svg>,
+    Plus: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
+    Upload: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" x2="12" y1="3" y2="15" /></svg>,
+    Image: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>
+};
+
+// --- Components ---
+
+const MenuBar = ({ onExport, onUndo, onRedo, canvasSize, setCanvasSize }) => {
+    const [activeMenu, setActiveMenu] = useState(null);
+
+    const menus = {
+        File: [
+            { label: 'New', action: () => console.log('New') },
+            { label: 'Open', action: () => console.log('Open') },
+            { label: 'Export JSON', action: onExport },
+        ],
+        Edit: [
+            { label: 'Undo (Ctrl+Z)', action: onUndo },
+            { label: 'Redo (Ctrl+Shift+Z)', action: onRedo },
+            { label: 'Cut', action: () => console.log('Cut') },
+            { label: 'Copy', action: () => console.log('Copy') },
+            { label: 'Paste', action: () => console.log('Paste') },
+        ],
+        View: [
+            { label: 'Zoom In', action: () => console.log('Zoom In') },
+            { label: 'Zoom Out', action: () => console.log('Zoom Out') },
+            { label: 'Fit to Screen', action: () => console.log('Fit') },
+        ],
+        Artboard: [
+            { label: 'Resize to 1920x1080', action: () => setCanvasSize({ width: 1920, height: 1080 }) },
+            { label: 'Resize to 1280x720', action: () => setCanvasSize({ width: 1280, height: 720 }) },
+            { label: 'Resize to 800x600', action: () => setCanvasSize({ width: 800, height: 600 }) },
+            {
+                label: 'Custom Size...', action: () => {
+                    const w = prompt('Width:', canvasSize.width);
+                    const h = prompt('Height:', canvasSize.height);
+                    if (w && h) setCanvasSize({ width: Number(w), height: Number(h) });
+                }
+            },
+        ]
+    };
+
+    return (
+        <div className="menu-bar" style={{
+            height: '30px',
+            background: 'var(--bg-panel)',
+            borderBottom: '1px solid var(--border-color)',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 10px',
+            fontSize: '12px',
+            userSelect: 'none'
+        }}>
+            {Object.keys(menus).map(menuName => (
+                <div
+                    key={menuName}
+                    style={{
+                        padding: '0 12px',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: activeMenu === menuName ? 'var(--selection)' : 'transparent'
+                    }}
+                    onClick={() => setActiveMenu(activeMenu === menuName ? null : menuName)}
+                >
+                    {menuName}
+                    {activeMenu === menuName && (
+                        <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            background: 'var(--bg-panel)',
+                            border: '1px solid var(--border-color)',
+                            minWidth: '150px',
+                            zIndex: 1000,
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.3)'
+                        }}>
+                            {menus[menuName].map((item, i) => (
+                                <div
+                                    key={i}
+                                    style={{
+                                        padding: '8px 12px',
+                                        cursor: 'pointer',
+                                        hover: { background: 'var(--bg-app)' }
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        item.action();
+                                        setActiveMenu(null);
+                                    }}
+                                    onMouseEnter={(e) => e.target.style.background = 'var(--bg-app)'}
+                                    onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                                >
+                                    {item.label}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ))}
+            {activeMenu && (
+                <div
+                    style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 999 }}
+                    onClick={() => setActiveMenu(null)}
+                />
+            )}
+        </div>
+    );
+};
+
+const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG }) => {
+    const fileInputRef = useRef(null);
+    const svgInputRef = useRef(null);
+
+    const tools = [
+        { id: 'select', icon: Icons.MousePointer },
+        { id: 'rect', icon: Icons.Square },
+        { id: 'ellipse', icon: Icons.Circle },
+        { id: 'pen', icon: Icons.Pen },
+    ];
+
+    return (
+        <div className="toolbar">
+            {tools.map(tool => (
+                <div
+                    key={tool.id}
+                    className={`tool-btn ${activeTool === tool.id ? 'active' : ''}`}
+                    onClick={() => setTool(tool.id)}
+                    title={tool.id.charAt(0).toUpperCase() + tool.id.slice(1)}
+                >
+                    <tool.icon />
+                </div>
+            ))}
+            <div style={{ borderTop: '1px solid var(--border-color)', margin: '8px 0', width: '100%' }}></div>
+            <div
+                className="tool-btn"
+                onClick={() => fileInputRef.current?.click()}
+                title="Import Image"
+            >
+                <Icons.Image />
+            </div>
+            <div
+                className="tool-btn"
+                onClick={() => svgInputRef.current?.click()}
+                title="Import SVG"
+            >
+                <Icons.Upload />
+            </div>
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={onImportImage}
+            />
+            <input
+                ref={svgInputRef}
+                type="file"
+                accept=".svg"
+                style={{ display: 'none' }}
+                onChange={onImportSVG}
+            />
+        </div>
+    );
+};
+
+const Hierarchy = ({ shapes, selection, setSelection }) => {
+    return (
+        <div className="panel left-panel">
+            <div className="panel-header">Hierarchy</div>
+            <div className="panel-content">
+                {shapes.map(shape => (
+                    <div
+                        key={shape.id}
+                        className={`tree-item ${selection === shape.id ? 'selected' : ''}`}
+                        onClick={() => setSelection(shape.id)}
+                    >
+                        {shape.type === 'rect' ? <Icons.Square /> :
+                            shape.type === 'ellipse' ? <Icons.Circle /> :
+                                shape.type === 'image' ? <Icons.Image /> : <Icons.Pen />}
+                        <span>{shape.name}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const Properties = ({ selection, shapes, updateShape }) => {
+    const selectedShape = shapes.find(s => s.id === selection);
+
+    if (!selectedShape) {
+        return (
+            <div className="panel right-panel">
+                <div className="panel-header">Properties</div>
+                <div className="panel-content" style={{ color: 'var(--text-secondary)', fontSize: '12px', textAlign: 'center', marginTop: '20px' }}>
+                    No selection
+                </div>
+            </div>
+        );
+    }
+
+    const handleChange = (field, value) => {
+        updateShape(selection, { [field]: value });
+    };
+
+    return (
+        <div className="panel right-panel">
+            <div className="panel-header">Properties</div>
+            <div className="panel-content">
+                <div className="property-group">
+                    <span className="property-label">Transform</span>
+                    <div className="property-row">
+                        <div className="input-group">
+                            <label>X</label>
+                            <input
+                                type="number"
+                                value={Math.round(selectedShape.x)}
+                                onChange={(e) => handleChange('x', Number(e.target.value))}
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label>Y</label>
+                            <input
+                                type="number"
+                                value={Math.round(selectedShape.y)}
+                                onChange={(e) => handleChange('y', Number(e.target.value))}
+                            />
+                        </div>
+                    </div>
+                    {selectedShape.type !== 'path' && (
+                        <>
+                            <div className="property-row">
+                                <div className="input-group">
+                                    <label>W</label>
+                                    <input
+                                        type="number"
+                                        value={Math.round(selectedShape.width)}
+                                        onChange={(e) => handleChange('width', Number(e.target.value))}
+                                    />
+                                </div>
+                                <div className="input-group">
+                                    <label>H</label>
+                                    <input
+                                        type="number"
+                                        value={Math.round(selectedShape.height)}
+                                        onChange={(e) => handleChange('height', Number(e.target.value))}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
+                    <div className="property-row">
+                        <div className="input-group">
+                            <label>R</label>
+                            <input
+                                type="number"
+                                value={selectedShape.rotation || 0}
+                                onChange={(e) => handleChange('rotation', Number(e.target.value))}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="property-group">
+                    <span className="property-label">Style</span>
+                    <div className="property-row">
+                        <div className="input-group">
+                            <label>Fill</label>
+                            <input
+                                type="color"
+                                value={selectedShape.fill || '#ffffff'}
+                                onChange={(e) => handleChange('fill', e.target.value)}
+                                style={{ height: '24px', padding: 0, width: '100%' }}
+                            />
+                        </div>
+                    </div>
+                    <div className="property-row">
+                        <div className="input-group">
+                            <label>Stroke</label>
+                            <input
+                                type="color"
+                                value={selectedShape.stroke || '#ffffff'}
+                                onChange={(e) => handleChange('stroke', e.target.value)}
+                                style={{ height: '24px', padding: 0, width: '100%' }}
+                            />
+                        </div>
+                    </div>
+                    <div className="property-row">
+                        <div className="input-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                            <label style={{ marginBottom: '4px', width: 'auto' }}>Stroke Width: {selectedShape.strokeWidth || 0}px</label>
+                            <input
+                                type="number"
+                                value={selectedShape.strokeWidth || 0}
+                                onChange={(e) => handleChange('strokeWidth', Number(e.target.value))}
+                                min="0"
+                                style={{
+                                    width: '100%',
+                                    background: 'var(--bg-app)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-primary)',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px'
+                                }}
+                            />
+                        </div>
+                    </div>
+                    <div className="property-row">
+                        <div className="input-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                            <label style={{ marginBottom: '4px', width: 'auto' }}>Opacity: {Math.round((selectedShape.opacity || 1) * 100)}%</label>
+                            <input
+                                type="range"
+                                value={selectedShape.opacity || 1}
+                                onChange={(e) => handleChange('opacity', Number(e.target.value))}
+                                min="0"
+                                max="1"
+                                step="0.01"
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
+                    <div className="property-row">
+                        <div className="input-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                            <label style={{ marginBottom: '4px', width: 'auto' }}>Blend Mode</label>
+                            <select
+                                value={selectedShape.blendMode || 'normal'}
+                                onChange={(e) => handleChange('blendMode', e.target.value)}
+                                style={{
+                                    background: 'var(--bg-app)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-primary)',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '12px'
+                                }}
+                            >
+                                <option value="normal">Normal</option>
+                                <option value="multiply">Multiply</option>
+                                <option value="screen">Screen</option>
+                                <option value="overlay">Overlay</option>
+                                <option value="darken">Darken</option>
+                                <option value="lighten">Lighten</option>
+                                <option value="color-dodge">Color Dodge</option>
+                                <option value="color-burn">Color Burn</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="property-row">
+                        <div className="input-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                            <label style={{ marginBottom: '4px', width: 'auto' }}>Mask</label>
+                            <select
+                                value={selectedShape.maskId || ''}
+                                onChange={(e) => handleChange('maskId', e.target.value ? Number(e.target.value) : null)}
+                                style={{
+                                    background: 'var(--bg-app)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-primary)',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '12px'
+                                }}
+                            >
+                                <option value="">None</option>
+                                {shapes.filter(s => s.id !== selection).map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const Timeline = ({
+    isPlaying, setIsPlaying, currentTime, setCurrentTime,
+    duration, setDuration, shapes, selection,
+    keyframes, addKeyframe, deleteKeyframe,
+    animations, activeAnimationId, setActiveAnimationId, addAnimation
+}) => {
+    const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+    const timelineRef = useRef(null);
+
+    const handlePlayheadMouseDown = (e) => {
+        e.stopPropagation();
+        setIsDraggingPlayhead(true);
+    };
+
+    const handlePlayheadDrag = (e) => {
+        if (!timelineRef.current) return;
+        const rect = timelineRef.current.getBoundingClientRect();
+        const labelWidth = 200;
+        const trackWidth = rect.width - labelWidth;
+        const x = Math.max(0, Math.min(e.clientX - rect.left - labelWidth, trackWidth));
+        const newTime = (x / trackWidth) * duration;
+        setCurrentTime(Math.max(0, Math.min(newTime, duration)));
+    };
+
+    const handleTrackClick = (e) => {
+        if (e.target.closest('.keyframe') || e.target.closest('.playhead-handle')) return;
+        handlePlayheadDrag(e);
+    };
+
+    useEffect(() => {
+        if (isDraggingPlayhead) {
+            const handleMouseMove = (e) => handlePlayheadDrag(e);
+            const handleMouseUp = () => setIsDraggingPlayhead(false);
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            return () => {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleMouseUp);
+            };
+        }
+    }, [isDraggingPlayhead, duration]);
+
+    const handleAddKeyframe = () => {
+        if (!selection) return;
+        const selectedShape = shapes.find(s => s.id === selection);
+        if (!selectedShape) return;
+
+        addKeyframe({
+            shapeId: selection,
+            time: currentTime,
+            properties: {
+                x: selectedShape.x,
+                y: selectedShape.y,
+                width: selectedShape.width,
+                height: selectedShape.height,
+                rotation: selectedShape.rotation || 0,
+                opacity: selectedShape.opacity || 1
+            }
+        });
+    };
+
+    const selectedShape = shapes.find(s => s.id === selection);
+
+    return (
+        <div className="timeline">
+            <div className="timeline-header">
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', borderRight: '1px solid var(--border-color)', paddingRight: '8px', marginRight: '8px' }}>
+                        <select
+                            value={activeAnimationId}
+                            onChange={(e) => setActiveAnimationId(Number(e.target.value))}
+                            style={{
+                                background: 'transparent',
+                                color: 'var(--text-primary)',
+                                border: 'none',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                outline: 'none',
+                                cursor: 'pointer',
+                                maxWidth: '120px'
+                            }}
+                        >
+                            {animations.map(anim => (
+                                <option key={anim.id} value={anim.id}>{anim.name}</option>
+                            ))}
+                        </select>
+                        <button
+                            className="btn"
+                            onClick={addAnimation}
+                            style={{ padding: '2px', marginLeft: '4px', border: 'none' }}
+                            title="New Animation"
+                        >
+                            <Icons.Plus />
+                        </button>
+                    </div>
+                    <button className="btn" onClick={() => setIsPlaying(!isPlaying)}>
+                        {isPlaying ? <Icons.Pause /> : <Icons.Play />}
+                    </button>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        {(currentTime / 1000).toFixed(2)}s / {(duration / 1000).toFixed(1)}s
+                    </span>
+                    <input
+                        type="number"
+                        value={duration / 1000}
+                        onChange={(e) => setDuration(Math.max(1, Number(e.target.value)) * 1000)}
+                        style={{
+                            background: 'var(--bg-app)',
+                            border: '1px solid var(--border-color)',
+                            color: 'var(--text-primary)',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            width: '50px'
+                        }}
+                    />
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>sec</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {selectedShape && (
+                        <button
+                            className="btn"
+                            onClick={handleAddKeyframe}
+                            title="Add Keyframe (K)"
+                        >
+                            <Icons.Plus /> Keyframe
+                        </button>
+                    )}
+                </div>
+            </div>
+            <div className="timeline-tracks" ref={timelineRef} onClick={handleTrackClick}>
+                {/* Frame guides - every 5 frames at 30fps */}
+                <div style={{ position: 'absolute', top: 0, left: '200px', right: 0, height: '100%', pointerEvents: 'none' }}>
+                    {Array.from({ length: Math.floor((duration / 1000) * 30 / 5) + 1 }).map((_, i) => {
+                        const frameTime = (i * 5 / 30) * 1000; // 5 frames at 30fps
+                        const percent = (frameTime / duration) * 100;
+                        return (
+                            <div
+                                key={i}
+                                style={{
+                                    position: 'absolute',
+                                    left: `${percent}%`,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: '1px',
+                                    background: i % 6 === 0 ? 'rgba(161, 161, 170, 0.3)' : 'rgba(161, 161, 170, 0.1)',
+                                    pointerEvents: 'none'
+                                }}
+                            >
+                                {i % 6 === 0 && (
+                                    <span style={{
+                                        position: 'absolute',
+                                        top: '-18px',
+                                        left: '2px',
+                                        fontSize: '9px',
+                                        color: 'var(--text-secondary)',
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        {i * 5}
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+                {shapes.map(shape => {
+                    const shapeKeyframes = keyframes.filter(kf => kf.shapeId === shape.id);
+                    return (
+                        <div key={shape.id} className="track">
+                            <div className="track-label">{shape.name}</div>
+                            <div className="track-content">
+                                {shapeKeyframes.map((kf, idx) => (
+                                    <div
+                                        key={idx}
+                                        className={`keyframe ${Math.abs(kf.time - currentTime) < 50 ? 'active' : ''}`}
+                                        style={{ left: `${(kf.time / duration) * 100}%` }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCurrentTime(kf.time);
+                                        }}
+                                        onDoubleClick={(e) => {
+                                            e.stopPropagation();
+                                            deleteKeyframe(kf);
+                                        }}
+                                        title={`${(kf.time / 1000).toFixed(2)}s - Double click to delete`}
+                                    ></div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+
+                {/* Playhead */}
+                <div
+                    className="playhead"
+                    style={{ left: `calc(200px + (100% - 200px) * ${currentTime / duration})` }}
+                >
+                    <div
+                        className="playhead-handle"
+                        onMouseDown={handlePlayheadMouseDown}
+                        style={{ cursor: 'ew-resize' }}
+                    ></div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, onUpdateEnd, canvasSize }) => {
+    const [isDragging, setIsDragging] = useState(false);
+    const [isResizing, setIsResizing] = useState(false);
+    const [isRotating, setIsRotating] = useState(false);
+    const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+    const [resizeHandle, setResizeHandle] = useState(null);
+    const [pathPoints, setPathPoints] = useState([]);
+    const [isDrawing, setIsDrawing] = useState(false);
+    const [activePointIndex, setActivePointIndex] = useState(-1);
+    const canvasRef = useRef(null);
+
+    const getCanvasCoords = (e) => {
+        const rect = canvasRef.current.getBoundingClientRect();
+        return {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+    };
+
+    const finishPath = (closed = false) => {
+        if (pathPoints.length < 2) return;
+
+        const points = [...pathPoints];
+        const pathData = points.map((p, i) => {
+            if (i === 0) return `M ${p.x} ${p.y}`;
+            const prev = points[i - 1];
+            return `C ${prev.x + prev.hx} ${prev.y + prev.hy} ${p.x - p.hx} ${p.y - p.hy} ${p.x} ${p.y}`;
+        }).join(' ');
+
+        const finalPathData = closed ? pathData + ' Z' : pathData;
+
+        const bounds = points.reduce((acc, p) => ({
+            minX: Math.min(acc.minX, p.x),
+            minY: Math.min(acc.minY, p.y),
+            maxX: Math.max(acc.maxX, p.x),
+            maxY: Math.max(acc.maxY, p.y)
+        }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+
+        addShape({
+            type: 'path',
+            x: bounds.minX,
+            y: bounds.minY,
+            pathData: finalPathData,
+            fill: closed ? '#6366f1' : 'none',
+            stroke: '#10b981',
+            strokeWidth: 3,
+            opacity: 1,
+            name: `Path ${shapes.length + 1}`
+        });
+
+        setPathPoints([]);
+        setIsDrawing(false);
+        if (onUpdateEnd) onUpdateEnd();
+    };
+
+    const handleCanvasMouseDown = (e) => {
+        if (e.target.closest('.transform-handle') || e.target.closest('.shape-element')) return;
+
+        const coords = getCanvasCoords(e);
+
+        if (tool === 'rect') {
+            addShape({
+                type: 'rect',
+                x: coords.x - 50,
+                y: coords.y - 50,
+                width: 100,
+                height: 100,
+                fill: '#6366f1',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                opacity: 1,
+                blendMode: 'normal',
+                name: `Rectangle ${shapes.length + 1}`
+            });
+        } else if (tool === 'ellipse') {
+            addShape({
+                type: 'ellipse',
+                x: coords.x - 50,
+                y: coords.y - 50,
+                width: 100,
+                height: 100,
+                fill: '#ec4899',
+                stroke: '#ffffff',
+                strokeWidth: 2,
+                opacity: 1,
+                blendMode: 'normal',
+                name: `Circle ${shapes.length + 1}`
+            });
+        } else if (tool === 'pen') {
+            if (!isDrawing) {
+                setIsDrawing(true);
+                setPathPoints([{ ...coords, hx: 0, hy: 0 }]);
+                setActivePointIndex(0);
+            } else {
+                const firstPoint = pathPoints[0];
+                if (firstPoint && Math.abs(coords.x - firstPoint.x) < 10 && Math.abs(coords.y - firstPoint.y) < 10) {
+                    finishPath(true);
+                    return;
+                }
+                setPathPoints([...pathPoints, { ...coords, hx: 0, hy: 0 }]);
+                setActivePointIndex(pathPoints.length);
+            }
+            setIsDragging(true);
+            setDragStart(coords);
+        } else if (tool === 'select') {
+            setSelection(null);
+        }
+    };
+
+    const handleCanvasDoubleClick = (e) => {
+        if (tool === 'pen' && isDrawing && pathPoints.length > 1) {
+            finishPath(false);
+        }
+    };
+
+    const handleShapeMouseDown = (e, shapeId) => {
+        e.stopPropagation();
+        setSelection(shapeId);
+        setIsDragging(true);
+        const coords = getCanvasCoords(e);
+        setDragStart(coords);
+    };
+
+    const handleResizeMouseDown = (e, handle) => {
+        e.stopPropagation();
+        setIsResizing(true);
+        setResizeHandle(handle);
+        const coords = getCanvasCoords(e);
+        setDragStart(coords);
+    };
+
+    const handleRotateMouseDown = (e) => {
+        e.stopPropagation();
+        setIsRotating(true);
+        const coords = getCanvasCoords(e);
+        setDragStart(coords);
+    };
+
+    const handleMouseMove = (e) => {
+        const coords = getCanvasCoords(e);
+        const dx = coords.x - dragStart.x;
+        const dy = coords.y - dragStart.y;
+
+        if (tool === 'pen' && isDrawing && isDragging) {
+            const newPoints = [...pathPoints];
+            const point = newPoints[activePointIndex];
+            if (point) {
+                point.hx = coords.x - point.x;
+                point.hy = coords.y - point.y;
+                setPathPoints(newPoints);
+            }
+            return;
+        }
+
+        if (!selection) return;
+
+        const selectedShape = shapes.find(s => s.id === selection);
+        if (!selectedShape) return;
+
+        if (isDragging) {
+            updateShape(selection, {
+                x: selectedShape.x + dx,
+                y: selectedShape.y + dy
+            });
+            setDragStart(coords);
+        } else if (isResizing && resizeHandle) {
+            const newProps = { ...selectedShape };
+
+            switch (resizeHandle) {
+                case 'nw':
+                    newProps.x += dx;
+                    newProps.y += dy;
+                    newProps.width -= dx;
+                    newProps.height -= dy;
+                    break;
+                case 'ne':
+                    newProps.y += dy;
+                    newProps.width += dx;
+                    newProps.height -= dy;
+                    break;
+                case 'sw':
+                    newProps.x += dx;
+                    newProps.width -= dx;
+                    newProps.height += dy;
+                    break;
+                case 'se':
+                    newProps.width += dx;
+                    newProps.height += dy;
+                    break;
+            }
+
+            if (newProps.width > 10 && newProps.height > 10) {
+                updateShape(selection, newProps);
+                setDragStart(coords);
+            }
+        } else if (isRotating) {
+            const centerX = selectedShape.x + (selectedShape.width || 0) / 2;
+            const centerY = selectedShape.y + (selectedShape.height || 0) / 2;
+
+            const angle = Math.atan2(coords.y - centerY, coords.x - centerX) * (180 / Math.PI);
+            updateShape(selection, { rotation: Math.round(angle) });
+        }
+    };
+
+    const handleMouseUp = () => {
+        if (tool === 'pen' && isDragging) {
+            setIsDragging(false);
+            return;
+        }
+        if (isDragging || isResizing || isRotating) {
+            if (onUpdateEnd) onUpdateEnd();
+        }
+        setIsDragging(false);
+        setIsResizing(false);
+        setIsRotating(false);
+        setResizeHandle(null);
+    };
+
+    useEffect(() => {
+        if (isDragging || isResizing || isRotating) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            return () => {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleMouseUp);
+            };
+        }
+    }, [isDragging, isResizing, isRotating, dragStart, selection]);
+
+    const selectedShape = shapes.find(s => s.id === selection);
+
+    return (
+        <div className="canvas-area" onMouseDown={handleCanvasMouseDown} onDoubleClick={handleCanvasDoubleClick}>
+            <div className="artboard" style={{ width: canvasSize.width, height: canvasSize.height }} ref={canvasRef}>
+                <svg width="100%" height="100%">
+                    <defs>
+                        {shapes.map(shape => (
+                            <clipPath key={`mask-${shape.id}`} id={`mask-${shape.id}`}>
+                                {shape.type === 'rect' && <rect x={shape.x} y={shape.y} width={shape.width} height={shape.height} />}
+                                {shape.type === 'ellipse' && <ellipse cx={shape.x + shape.width / 2} cy={shape.y + shape.height / 2} rx={shape.width / 2} ry={shape.height / 2} />}
+                                {shape.type === 'path' && <path d={shape.pathData} />}
+                            </clipPath>
+                        ))}
+                    </defs>
+                    {shapes.map(shape => {
+                        const isSelected = selection === shape.id;
+                        const rotation = shape.rotation || 0;
+                        const centerX = shape.x + (shape.width || 0) / 2;
+                        const centerY = shape.y + (shape.height || 0) / 2;
+
+                        const commonProps = {
+                            key: shape.id,
+                            fill: shape.fill || 'transparent',
+                            stroke: shape.stroke || 'none',
+                            strokeWidth: shape.strokeWidth || 0,
+                            opacity: shape.opacity || 1,
+                            className: 'shape-element',
+                            onMouseDown: (e) => handleShapeMouseDown(e, shape.id),
+                            style: {
+                                cursor: tool === 'select' ? 'move' : 'pointer',
+                                mixBlendMode: shape.blendMode || 'normal'
+                            },
+                            transform: shape.type !== 'path' ? `rotate(${rotation} ${centerX} ${centerY})` : undefined,
+                            clipPath: shape.maskId ? `url(#mask-${shape.maskId})` : undefined
+                        };
+
+                        if (shape.type === 'rect') {
+                            return (
+                                <rect
+                                    x={shape.x}
+                                    y={shape.y}
+                                    width={shape.width}
+                                    height={shape.height}
+                                    {...commonProps}
+                                />
+                            );
+                        } else if (shape.type === 'ellipse') {
+                            return (
+                                <ellipse
+                                    cx={centerX}
+                                    cy={centerY}
+                                    rx={shape.width / 2}
+                                    ry={shape.height / 2}
+                                    {...commonProps}
+                                />
+                            );
+                        } else if (shape.type === 'path') {
+                            return (
+                                <path
+                                    d={shape.pathData}
+                                    {...commonProps}
+                                />
+                            );
+                        } else if (shape.type === 'image') {
+                            return (
+                                <image
+                                    key={shape.id}
+                                    x={shape.x}
+                                    y={shape.y}
+                                    width={shape.width}
+                                    height={shape.height}
+                                    href={shape.imageData}
+                                    opacity={shape.opacity || 1}
+                                    onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
+                                    style={{ cursor: tool === 'select' ? 'move' : 'pointer' }}
+                                    transform={`rotate(${rotation} ${centerX} ${centerY})`}
+                                    clipPath={shape.maskId ? `url(#mask-${shape.maskId})` : undefined}
+                                />
+                            );
+                        }
+                        return null;
+                    })}
+
+                    {/* Drawing path preview */}
+                    {isDrawing && pathPoints.length > 0 && (
+                        <g>
+                            <path
+                                d={pathPoints.map((p, i) => {
+                                    if (i === 0) return `M ${p.x} ${p.y}`;
+                                    const prev = pathPoints[i - 1];
+                                    return `C ${prev.x + prev.hx} ${prev.y + prev.hy} ${p.x - p.hx} ${p.y - p.hy} ${p.x} ${p.y}`;
+                                }).join(' ')}
+                                fill="none"
+                                stroke="#10b981"
+                                strokeWidth="2"
+                                strokeDasharray="4 2"
+                            />
+                            {pathPoints.map((p, i) => (
+                                <g key={i}>
+                                    <circle cx={p.x} cy={p.y} r="3" fill="#10b981" />
+                                    {/* Handle lines */}
+                                    {(p.hx !== 0 || p.hy !== 0) && (
+                                        <>
+                                            <line x1={p.x} y1={p.y} x2={p.x + p.hx} y2={p.y + p.hy} stroke="#10b981" strokeWidth="1" />
+                                            <circle cx={p.x + p.hx} cy={p.y + p.hy} r="2" fill="#10b981" />
+                                            <line x1={p.x} y1={p.y} x2={p.x - p.hx} y2={p.y - p.hy} stroke="#10b981" strokeWidth="1" />
+                                            <circle cx={p.x - p.hx} cy={p.y - p.hy} r="2" fill="#10b981" />
+                                        </>
+                                    )}
+                                </g>
+                            ))}
+                        </g>
+                    )}
+
+                    {/* Bounding Box */}
+                    {selectedShape && selectedShape.type !== 'path' && (
+                        <g className="bounding-box">
+                            {/* Selection Rectangle */}
+                            <rect
+                                x={selectedShape.x - 2}
+                                y={selectedShape.y - 2}
+                                width={selectedShape.width + 4}
+                                height={selectedShape.height + 4}
+                                fill="none"
+                                stroke="#6366f1"
+                                strokeWidth="1.5"
+                                strokeDasharray="4 2"
+                                pointerEvents="none"
+                                transform={`rotate(${selectedShape.rotation || 0} ${selectedShape.x + selectedShape.width / 2} ${selectedShape.y + selectedShape.height / 2})`}
+                            />
+
+                            {/* Corner Handles */}
+                            {['nw', 'ne', 'sw', 'se'].map(handle => {
+                                let hx, hy;
+                                switch (handle) {
+                                    case 'nw': hx = selectedShape.x; hy = selectedShape.y; break;
+                                    case 'ne': hx = selectedShape.x + selectedShape.width; hy = selectedShape.y; break;
+                                    case 'sw': hx = selectedShape.x; hy = selectedShape.y + selectedShape.height; break;
+                                    case 'se': hx = selectedShape.x + selectedShape.width; hy = selectedShape.y + selectedShape.height; break;
+                                }
+
+                                return (
+                                    <rect
+                                        key={handle}
+                                        className="transform-handle"
+                                        x={hx - 4}
+                                        y={hy - 4}
+                                        width="8"
+                                        height="8"
+                                        fill="#6366f1"
+                                        stroke="#ffffff"
+                                        strokeWidth="1.5"
+                                        style={{ cursor: `${handle}-resize` }}
+                                        onMouseDown={(e) => handleResizeMouseDown(e, handle)}
+                                    />
+                                );
+                            })}
+
+                            {/* Rotation Handle */}
+                            <line
+                                x1={selectedShape.x + selectedShape.width / 2}
+                                y1={selectedShape.y - 2}
+                                x2={selectedShape.x + selectedShape.width / 2}
+                                y2={selectedShape.y - 25}
+                                stroke="#6366f1"
+                                strokeWidth="1.5"
+                                pointerEvents="none"
+                            />
+                            <circle
+                                className="transform-handle"
+                                cx={selectedShape.x + selectedShape.width / 2}
+                                cy={selectedShape.y - 25}
+                                r="5"
+                                fill="#10b981"
+                                stroke="#ffffff"
+                                strokeWidth="1.5"
+                                style={{ cursor: 'grab' }}
+                                onMouseDown={handleRotateMouseDown}
+                            />
+                        </g>
+                    )}
+                </svg>
+            </div>
+            {isDrawing && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '20px',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    background: 'var(--bg-panel)',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--accent)',
+                    color: 'var(--text-primary)',
+                    fontSize: '12px'
+                }}>
+                    Click to add points • Double-click to finish
+                </div>
+            )}
+        </div>
+    );
+};
+
+const App = () => {
+    const [shapes, setShapes] = useState([
+        { id: 1, type: 'rect', x: 100, y: 100, width: 100, height: 100, fill: '#6366f1', stroke: '#ffffff', strokeWidth: 2, opacity: 1, blendMode: 'normal', name: 'Rectangle 1' },
+        { id: 2, type: 'ellipse', x: 300, y: 200, width: 100, height: 100, fill: '#ec4899', stroke: '#ffffff', strokeWidth: 2, opacity: 1, blendMode: 'normal', name: 'Circle 1' }
+    ]);
+    const [selection, setSelection] = useState(null);
+    const [tool, setTool] = useState('select');
+    const [mode, setMode] = useState('design');
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [animations, setAnimations] = useState([
+        { id: 1, name: 'Idle', duration: 5000, keyframes: [] }
+    ]);
+    const [activeAnimationId, setActiveAnimationId] = useState(1);
+    const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+
+    const activeAnimation = animations.find(a => a.id === activeAnimationId) || animations[0];
+    const duration = activeAnimation.duration;
+    const keyframes = activeAnimation.keyframes;
+
+    const setDuration = (newDuration) => {
+        const newAnimations = animations.map(a => a.id === activeAnimationId ? { ...a, duration: newDuration } : a);
+        setAnimations(newAnimations);
+        recordHistory(shapes, newAnimations);
+    };
+
+    const setKeyframes = (newKeyframes) => {
+        const newAnimations = animations.map(a => a.id === activeAnimationId ? { ...a, keyframes: newKeyframes } : a);
+        setAnimations(newAnimations);
+        // History recording is handled by the caller usually, but for consistency we can do it here if needed.
+        // However, addKeyframe/deleteKeyframe call recordHistory explicitly.
+    };
+
+    const [history, setHistory] = useState([]);
+    const [historyIndex, setHistoryIndex] = useState(-1);
+    const [clipboard, setClipboard] = useState(null);
+
+    // State Machine
+    const [stateMachineInputs, setStateMachineInputs] = useState([
+        { id: 1, name: 'isHovering', type: 'boolean', value: false },
+        { id: 2, name: 'speed', type: 'number', value: 1 }
+    ]);
+    const [stateMachineListeners, setStateMachineListeners] = useState([
+        { id: 1, name: 'onClick', type: 'trigger' },
+        { id: 2, name: 'onHover', type: 'trigger' }
+    ]);
+    const [transitions, setTransitions] = useState([
+        { id: 1, from: 'Entry', to: 1, condition: 'onClick', animationId: 1 }
+    ]);
+    const [draggedNode, setDraggedNode] = useState(null);
+
+    // History Management
+    const recordHistory = (newShapes, newAnimations) => {
+        const snapshot = {
+            shapes: JSON.parse(JSON.stringify(newShapes)),
+            animations: JSON.parse(JSON.stringify(newAnimations || animations))
+        };
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push(snapshot);
+        setHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+    };
+
+    // Initialize history
+    useEffect(() => {
+        if (history.length === 0 && shapes.length > 0) {
+            recordHistory(shapes, animations);
+        }
+    }, []);
+
+    const undo = () => {
+        if (historyIndex > 0) {
+            const prevIndex = historyIndex - 1;
+            const snapshot = history[prevIndex];
+            setShapes(snapshot.shapes);
+            setAnimations(snapshot.animations);
+            setHistoryIndex(prevIndex);
+        }
+    };
+
+    const redo = () => {
+        if (historyIndex < history.length - 1) {
+            const nextIndex = historyIndex + 1;
+            const snapshot = history[nextIndex];
+            setShapes(snapshot.shapes);
+            setAnimations(snapshot.animations);
+            setHistoryIndex(nextIndex);
+        }
+    };
+
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            // Delete
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selection) {
+                    const newShapes = shapes.filter(s => s.id !== selection);
+                    setShapes(newShapes);
+                    setSelection(null);
+                    recordHistory(newShapes, animations);
+                }
+            }
+            // Shortcuts
+            if (e.ctrlKey || e.metaKey) {
+                // Undo/Redo
+                if (e.key === 'z') {
+                    e.preventDefault();
+                    if (e.shiftKey) redo();
+                    else undo();
+                }
+                // Copy
+                if (e.key === 'c') {
+                    e.preventDefault();
+                    if (selection) {
+                        const shape = shapes.find(s => s.id === selection);
+                        setClipboard(shape);
+                    }
+                }
+                // Paste
+                if (e.key === 'v') {
+                    e.preventDefault();
+                    if (clipboard) {
+                        const newShape = {
+                            ...clipboard,
+                            id: Date.now(),
+                            x: clipboard.x + 20,
+                            y: clipboard.y + 20,
+                            name: clipboard.name + ' Copy'
+                        };
+                        const newShapes = [...shapes, newShape];
+                        setShapes(newShapes);
+                        setSelection(newShape.id);
+                        recordHistory(newShapes, animations);
+                    }
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [shapes, selection, clipboard, history, historyIndex, animations]);
+
+    // Animation Loop with interpolation
+    useEffect(() => {
+        let animationFrame;
+        if (isPlaying && mode === 'animate') {
+            const start = Date.now() - currentTime;
+            const loop = () => {
+                const now = Date.now();
+                let newTime = (now - start) % duration;
+                setCurrentTime(newTime);
+
+                // Interpolate shapes based on keyframes
+                shapes.forEach(shape => {
+                    const shapeKeyframes = keyframes
+                        .filter(kf => kf.shapeId === shape.id)
+                        .sort((a, b) => a.time - b.time);
+
+                    if (shapeKeyframes.length >= 2) {
+                        // Find surrounding keyframes
+                        let prevKf = null;
+                        let nextKf = null;
+
+                        for (let i = 0; i < shapeKeyframes.length - 1; i++) {
+                            if (shapeKeyframes[i].time <= newTime && shapeKeyframes[i + 1].time >= newTime) {
+                                prevKf = shapeKeyframes[i];
+                                nextKf = shapeKeyframes[i + 1];
+                                break;
+                            }
+                        }
+
+                        if (prevKf && nextKf) {
+                            const progress = (newTime - prevKf.time) / (nextKf.time - prevKf.time);
+                            const interpolated = {};
+
+                            Object.keys(prevKf.properties).forEach(key => {
+                                interpolated[key] = prevKf.properties[key] +
+                                    (nextKf.properties[key] - prevKf.properties[key]) * progress;
+                            });
+
+                            updateShape(shape.id, interpolated);
+                        }
+                    }
+                });
+
+                animationFrame = requestAnimationFrame(loop);
+            };
+            animationFrame = requestAnimationFrame(loop);
+        }
+        return () => cancelAnimationFrame(animationFrame);
+    }, [isPlaying, mode, currentTime]);
+
+    const addShape = (shape) => {
+        const newShape = { ...shape, id: Date.now() };
+        const newShapes = [...shapes, newShape];
+        setShapes(newShapes);
+        setSelection(newShape.id);
+        setTool('select');
+        recordHistory(newShapes, animations);
+    };
+
+    const updateShape = (id, newProps) => {
+        setShapes(shapes.map(s => s.id === id ? { ...s, ...newProps } : s));
+    };
+
+    const addKeyframe = (keyframe) => {
+        // Check if keyframe already exists at this time for this shape
+        const existingIndex = keyframes.findIndex(
+            kf => kf.shapeId === keyframe.shapeId && Math.abs(kf.time - keyframe.time) < 50
+        );
+
+        if (existingIndex >= 0) {
+            // Update existing keyframe
+            const newKeyframes = [...keyframes];
+            newKeyframes[existingIndex] = keyframe;
+            setKeyframes(newKeyframes);
+            const newAnimations = animations.map(a => a.id === activeAnimationId ? { ...a, keyframes: newKeyframes } : a);
+            recordHistory(shapes, newAnimations);
+        } else {
+            // Add new keyframe
+            const newKeyframes = [...keyframes, keyframe];
+            setKeyframes(newKeyframes);
+            const newAnimations = animations.map(a => a.id === activeAnimationId ? { ...a, keyframes: newKeyframes } : a);
+            recordHistory(shapes, newAnimations);
+        }
+    };
+
+    const deleteKeyframe = (keyframe) => {
+        const newKeyframes = keyframes.filter(kf => kf !== keyframe);
+        setKeyframes(newKeyframes);
+        const newAnimations = animations.map(a => a.id === activeAnimationId ? { ...a, keyframes: newKeyframes } : a);
+        recordHistory(shapes, newAnimations);
+    };
+
+    const addAnimation = () => {
+        const newAnim = {
+            id: Date.now(),
+            name: `Animation ${animations.length + 1}`,
+            duration: 5000,
+            keyframes: [],
+            x: 200 + animations.length * 50,
+            y: 100 + animations.length * 50
+        };
+        const newAnimations = [...animations, newAnim];
+        setAnimations(newAnimations);
+        setActiveAnimationId(newAnim.id);
+        recordHistory(shapes, newAnimations);
+    };
+
+    const handleImportImage = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                addShape({
+                    type: 'image',
+                    x: 100,
+                    y: 100,
+                    width: img.width > 400 ? 400 : img.width,
+                    height: img.height > 400 ? (400 / img.width) * img.height : img.height,
+                    imageData: event.target.result,
+                    opacity: 1,
+                    name: `Image ${shapes.length + 1}`
+                });
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = ''; // Reset input
+    };
+
+    const handleImportSVG = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const parser = new DOMParser();
+            const svgDoc = parser.parseFromString(event.target.result, 'image/svg+xml');
+            const svgElement = svgDoc.querySelector('svg');
+
+            if (svgElement) {
+                // Get SVG paths and convert to shapes
+                const paths = svgElement.querySelectorAll('path');
+                paths.forEach((path, idx) => {
+                    const d = path.getAttribute('d');
+                    const fill = path.getAttribute('fill') || '#000000';
+                    const stroke = path.getAttribute('stroke') || 'none';
+                    const strokeWidth = parseFloat(path.getAttribute('stroke-width') || '0');
+
+                    addShape({
+                        type: 'path',
+                        x: 100 + idx * 20,
+                        y: 100 + idx * 20,
+                        pathData: d,
+                        fill: fill === 'none' ? 'transparent' : fill,
+                        stroke: stroke,
+                        strokeWidth: strokeWidth,
+                        opacity: 1,
+                        name: `SVG Path ${shapes.length + idx + 1}`
+                    });
+                });
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = ''; // Reset input
+    };
+
+    const handleExport = () => {
+        const data = JSON.stringify({ shapes, mode, animations }, null, 2);
+        const blob = new Blob([data], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'rive-clone-export.json';
+        a.click();
+    };
+
+    // Keyboard shortcuts
+    useEffect(() => {
+        const handleKeyPress = (e) => {
+            if (e.key === 'k' && selection && mode === 'animate') {
+                const selectedShape = shapes.find(s => s.id === selection);
+                if (selectedShape) {
+                    addKeyframe({
+                        shapeId: selection,
+                        time: currentTime,
+                        properties: {
+                            x: selectedShape.x,
+                            y: selectedShape.y,
+                            width: selectedShape.width,
+                            height: selectedShape.height,
+                            rotation: selectedShape.rotation || 0,
+                            opacity: selectedShape.opacity || 1
+                        }
+                    });
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyPress);
+        return () => window.removeEventListener('keydown', handleKeyPress);
+    }, [selection, currentTime, shapes, mode]);
+
+
+    useEffect(() => {
+        if (draggedNode) {
+            const handleMouseMove = (e) => {
+                setAnimations(prev => prev.map(anim => {
+                    if (anim.id === draggedNode) {
+                        return { ...anim, x: (anim.x || 200) + e.movementX, y: (anim.y || 100) + e.movementY };
+                    }
+                    return anim;
+                }));
+            };
+            const handleMouseUp = () => setDraggedNode(null);
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            return () => {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleMouseUp);
+            };
+        }
+    }, [draggedNode]);
+
+    const handleNodeMouseDown = (e, animId) => {
+        e.stopPropagation();
+        setDraggedNode(animId);
+    };
+
+    return (
+        <div className="app-container" style={{
+            gridTemplateRows: mode === 'animate' ? 'var(--header-height) 30px 1fr var(--timeline-height)' : 'var(--header-height) 30px 1fr 0px'
+        }}>
+            <div className="header">
+                <div className="logo">
+                    <Icons.Layers />
+                    <span>Rive Clone</span>
+                </div>
+                <div className="mode-switcher">
+                    <div
+                        className={`mode-btn ${mode === 'design' ? 'active' : ''}`}
+                        onClick={() => setMode('design')}
+                    >
+                        Design
+                    </div>
+                    <div
+                        className={`mode-btn ${mode === 'state_machine' ? 'active' : ''}`}
+                        onClick={() => setMode('state_machine')}
+                    >
+                        State Machine
+                    </div>
+                    <div
+                        className={`mode-btn ${mode === 'animate' ? 'active' : ''}`}
+                        onClick={() => setMode('animate')}
+                    >
+                        Animate
+                    </div>
+                </div>
+                <div className="actions">
+                    <button className="btn primary" onClick={handleExport}>
+                        <Icons.Download /> Export
+                    </button>
+                </div>
+            </div>
+
+            <MenuBar
+                onExport={handleExport}
+                onUndo={undo}
+                onRedo={redo}
+                canvasSize={canvasSize}
+                setCanvasSize={setCanvasSize}
+            />
+
+            <Toolbar activeTool={tool} setTool={setTool} onImportImage={handleImportImage} onImportSVG={handleImportSVG} />
+
+            <Hierarchy
+                shapes={shapes}
+                selection={selection}
+                setSelection={setSelection}
+            />
+
+            {
+                mode === 'state_machine' ? (
+                    <div className="canvas-area" style={{ gridArea: 'canvas', background: '#121212', display: 'flex', gap: '20px', padding: '20px' }}>
+                        {/* Left Panel - Inputs & Listeners */}
+                        <div style={{
+                            width: '250px',
+                            background: 'var(--bg-panel)',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px'
+                        }}>
+                            {/* Inputs Section */}
+                            <div>
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '8px'
+                                }}>
+                                    <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                                        Inputs
+                                    </h3>
+                                    <button
+                                        className="btn"
+                                        style={{ padding: '2px 6px', fontSize: '11px' }}
+                                        onClick={() => {
+                                            const newInput = {
+                                                id: Date.now(),
+                                                name: `input${stateMachineInputs.length + 1}`,
+                                                type: 'boolean',
+                                                value: false
+                                            };
+                                            setStateMachineInputs([...stateMachineInputs, newInput]);
+                                        }}
+                                    >
+                                        <Icons.Plus />
+                                    </button>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {stateMachineInputs.map(input => (
+                                        <div key={input.id} style={{
+                                            background: 'var(--bg-app)',
+                                            padding: '8px',
+                                            borderRadius: '4px',
+                                            fontSize: '11px'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{input.name}</span>
+                                                <span style={{
+                                                    color: 'var(--text-secondary)',
+                                                    fontSize: '10px',
+                                                    background: 'var(--bg-panel)',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '3px'
+                                                }}>
+                                                    {input.type}
+                                                </span>
+                                            </div>
+                                            {input.type === 'boolean' && (
+                                                <div style={{ marginTop: '4px' }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={input.value}
+                                                        onChange={(e) => {
+                                                            setStateMachineInputs(stateMachineInputs.map(i =>
+                                                                i.id === input.id ? { ...i, value: e.target.checked } : i
+                                                            ));
+                                                        }}
+                                                    />
+                                                    <span style={{ marginLeft: '6px', color: 'var(--text-secondary)' }}>
+                                                        {input.value ? 'true' : 'false'}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {input.type === 'number' && (
+                                                <input
+                                                    type="number"
+                                                    value={input.value}
+                                                    onChange={(e) => {
+                                                        setStateMachineInputs(stateMachineInputs.map(i =>
+                                                            i.id === input.id ? { ...i, value: Number(e.target.value) } : i
+                                                        ));
+                                                    }}
+                                                    style={{
+                                                        marginTop: '4px',
+                                                        width: '100%',
+                                                        background: 'var(--bg-panel)',
+                                                        border: '1px solid var(--border-color)',
+                                                        color: 'var(--text-primary)',
+                                                        padding: '4px',
+                                                        borderRadius: '3px',
+                                                        fontSize: '11px'
+                                                    }}
+                                                />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Listeners Section */}
+                            <div>
+                                <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    marginBottom: '8px'
+                                }}>
+                                    <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                                        Listeners
+                                    </h3>
+                                    <button
+                                        className="btn"
+                                        style={{ padding: '2px 6px', fontSize: '11px' }}
+                                        onClick={() => {
+                                            const newListener = {
+                                                id: Date.now(),
+                                                name: `listener${stateMachineListeners.length + 1}`,
+                                                type: 'trigger'
+                                            };
+                                            setStateMachineListeners([...stateMachineListeners, newListener]);
+                                        }}
+                                    >
+                                        <Icons.Plus />
+                                    </button>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    {stateMachineListeners.map(listener => (
+                                        <div key={listener.id} style={{
+                                            background: 'var(--bg-app)',
+                                            padding: '8px',
+                                            borderRadius: '4px',
+                                            fontSize: '11px',
+                                            display: 'flex',
+                                            justifyContent: 'space-between',
+                                            alignItems: 'center'
+                                        }}>
+                                            <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{listener.name}</span>
+                                            <button
+                                                style={{
+                                                    background: 'var(--accent)',
+                                                    border: 'none',
+                                                    color: 'white',
+                                                    padding: '3px 8px',
+                                                    borderRadius: '3px',
+                                                    fontSize: '10px',
+                                                    cursor: 'pointer'
+                                                }}
+                                                onClick={() => {
+                                                    console.log(`Triggered: ${listener.name}`);
+                                                    // Here you would trigger the actual state machine transition
+                                                }}
+                                            >
+                                                Fire
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Center - State Machine Graph */}
+                        <div style={{
+                            flex: 1,
+                            background: 'var(--bg-panel)',
+                            borderRadius: '8px',
+                            padding: '20px',
+                            position: 'relative',
+                            minHeight: '400px'
+                        }}>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '16px' }}>
+                                State Machine Graph
+                            </div>
+
+                            {/* Entry Node */}
+                            <div style={{
+                                position: 'absolute',
+                                top: '80px',
+                                left: '50px',
+                                padding: '12px 24px',
+                                background: 'var(--accent)',
+                                border: '2px solid var(--accent)',
+                                borderRadius: '24px',
+                                color: 'white',
+                                fontSize: '12px',
+                                fontWeight: 600
+                            }}>
+                                Entry
+                            </div>
+
+                            {/* Animation State Nodes */}
+                            <svg style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                                pointerEvents: 'none'
+                            }}>
+                                {/* Draw connections */}
+                                {animations.map((anim, i) => {
+                                    const startX = 140;
+                                    const startY = 95;
+
+                                    let x1, y1, x2, y2;
+
+                                    if (i === 0) {
+                                        x1 = 140; y1 = 95;
+                                        x2 = (anim.x || 200); y2 = (anim.y || 70) + 20;
+                                    } else {
+                                        const prev = animations[i - 1];
+                                        x1 = (prev.x || 200 + (i - 1) * 180) + 100;
+                                        y1 = (prev.y || 70) + 20;
+                                        x2 = (anim.x || 200 + i * 180);
+                                        y2 = (anim.y || 70) + 20;
+                                    }
+
+                                    return (
+                                        <g key={anim.id}>
+                                            <line
+                                                x1={x1}
+                                                y1={y1}
+                                                x2={x2}
+                                                y2={y2}
+                                                stroke="var(--text-secondary)"
+                                                strokeWidth="2"
+                                                markerEnd="url(#arrowhead)"
+                                            />
+                                        </g>
+                                    );
+                                })}
+                                <defs>
+                                    <marker
+                                        id="arrowhead"
+                                        markerWidth="10"
+                                        markerHeight="10"
+                                        refX="9"
+                                        refY="3"
+                                        orient="auto"
+                                    >
+                                        <polygon points="0 0, 10 3, 0 6" fill="var(--text-secondary)" />
+                                    </marker>
+                                </defs>
+                            </svg>
+
+                            {animations.map((anim, i) => (
+                                <div
+                                    key={anim.id}
+                                    style={{
+                                        position: 'absolute',
+                                        top: `${anim.y || 70}px`,
+                                        left: `${anim.x || 200 + i * 180}px`,
+                                        padding: '12px 24px',
+                                        background: activeAnimationId === anim.id ? 'var(--selection)' : 'var(--bg-app)',
+                                        border: `2px solid ${activeAnimationId === anim.id ? 'var(--accent)' : 'var(--border-color)'}`,
+                                        borderRadius: '24px',
+                                        color: activeAnimationId === anim.id ? 'var(--accent)' : 'var(--text-primary)',
+                                        fontSize: '12px',
+                                        fontWeight: 500,
+                                        cursor: 'grab',
+                                        userSelect: 'none',
+                                        transition: 'border-color 0.2s, background 0.2s'
+                                    }}
+                                    onMouseDown={(e) => handleNodeMouseDown(e, anim.id)}
+                                    onClick={() => setActiveAnimationId(anim.id)}
+                                >
+                                    {anim.name}
+                                </div>
+                            ))}
+
+                            {/* Instructions */}
+                            <div style={{
+                                position: 'absolute',
+                                bottom: '20px',
+                                left: '20px',
+                                right: '20px',
+                                padding: '12px',
+                                background: 'var(--bg-app)',
+                                borderRadius: '6px',
+                                border: '1px solid var(--border-color)',
+                                fontSize: '11px',
+                                color: 'var(--text-secondary)'
+                            }}>
+                                <strong style={{ color: 'var(--text-primary)' }}>State Machine:</strong> Use inputs to control animation parameters,
+                                and listeners to trigger transitions between states. Click animation nodes to select them.
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <Canvas
+                        shapes={shapes}
+                        selection={selection}
+                        setSelection={setSelection}
+                        tool={tool}
+                        addShape={addShape}
+                        updateShape={updateShape}
+                        onUpdateEnd={() => recordHistory(shapes, animations)}
+                        canvasSize={canvasSize}
+                    />
+                )
+            }
+
+            <Properties
+                selection={selection}
+                shapes={shapes}
+                updateShape={updateShape}
+            />
+
+            {
+                mode === 'animate' && (
+                    <Timeline
+                        isPlaying={isPlaying}
+                        setIsPlaying={setIsPlaying}
+                        currentTime={currentTime}
+                        setCurrentTime={setCurrentTime}
+                        duration={duration}
+                        setDuration={setDuration}
+                        shapes={shapes}
+                        selection={selection}
+                        keyframes={keyframes}
+                        addKeyframe={addKeyframe}
+                        deleteKeyframe={deleteKeyframe}
+                        animations={animations}
+                        activeAnimationId={activeAnimationId}
+                        setActiveAnimationId={setActiveAnimationId}
+                        addAnimation={addAnimation}
+                    />
+                )
+            }
+        </div >
+    );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
