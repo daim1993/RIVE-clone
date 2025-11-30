@@ -213,36 +213,6 @@ body {
 }
 
 .panel-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-}
-
-/* Tree View (Hierarchy) */
-.tree-item {
-    display: flex;
-    align-items: center;
-    padding: 6px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    color: var(--text-primary);
-    gap: 8px;
-}
-
-.tree-item:hover {
-    background-color: var(--bg-panel-hover);
-}
-
-.tree-item.selected {
-    background-color: var(--selection);
-    color: var(--accent);
-}
-
-/* Canvas */
-.canvas-area {
-    grid-area: canvas;
-    background-color: #000;
     position: relative;
     overflow: hidden;
     display: flex;
