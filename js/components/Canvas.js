@@ -537,6 +537,16 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     const selectedShape = selection.length > 0 ? shapes.find(s => s.id === selection[0]) : null;
     const tree = buildTree(shapes);
 
+    // Helper to get filter URL for a shape
+    const getShapeFilter = (shape) => {
+        if (shape.glassEffect) {
+            return `url(#glass-${shape.id})`;
+        } else if (shape.blur && shape.blur > 0) {
+            return `url(#blur-${shape.id})`;
+        }
+        return null;
+    };
+
     const renderBoundingBox = (shape) => {
         if (!shape) return null;
 
@@ -601,6 +611,18 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
 
         const transform = `translate(${shape.x}, ${shape.y}) rotate(${rotation} ${(shape.width || 0) / 2} ${(shape.height || 0) / 2}) scale(${shape.scaleX || 1}, ${shape.scaleY || 1})`;
 
+        // Skip rendering glass shapes in SVG - they're rendered as HTML overlays
+        if (shape.glassEffect) {
+            return (
+                <g key={shape.id} transform={transform}>
+                    {/* Children still need to render */}
+                    {shape.children && shape.children.map(child => renderShapeRecursiveWithSelection(child))}
+                    {/* Selection / Bounding Box */}
+                    {isSelected && !isEditingPath && renderBoundingBox(shape)}
+                </g>
+            );
+        }
+
         return (
             <g key={shape.id} transform={transform}>
                 {/* Shape Content */}
@@ -623,6 +645,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                             stroke={shape.stroke}
                             strokeWidth={shape.strokeWidth}
                             opacity={shape.opacity}
+                            filter={getShapeFilter(shape)}
                             style={{ mixBlendMode: shape.blendMode }}
                             onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
                             onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)}
@@ -656,14 +679,15 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                         stroke={shape.stroke}
                         strokeWidth={shape.strokeWidth}
                         opacity={shape.opacity}
+                        filter={getShapeFilter(shape)}
                         style={{ mixBlendMode: shape.blendMode }}
                         onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
                         onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)}
                     />;
                 })()}
-                {shape.type === 'ellipse' && <ellipse cx={shape.width / 2} cy={shape.height / 2} rx={shape.width / 2} ry={shape.height / 2} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
-                {shape.type === 'path' && <path d={shape.pathData} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
-                {shape.type === 'image' && <image href={shape.imageData} width={shape.width} height={shape.height} opacity={shape.opacity} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
+                {shape.type === 'ellipse' && <ellipse cx={shape.width / 2} cy={shape.height / 2} rx={shape.width / 2} ry={shape.height / 2} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} filter={getShapeFilter(shape)} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
+                {shape.type === 'path' && <path d={shape.pathData} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} filter={getShapeFilter(shape)} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
+                {shape.type === 'image' && <image href={shape.imageData} width={shape.width} height={shape.height} opacity={shape.opacity} filter={getShapeFilter(shape)} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
                 {shape.type === 'group' && <rect width={50} height={50} fill="none" stroke={isSelected ? "#6366f1" : "none"} strokeDasharray="2 2" onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} />}
 
                 {/* Children */}
@@ -794,7 +818,31 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             >
                 <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
                     <defs>
-                        {/* Masks if needed */}
+                        {/* Blur and Glass Effect Filters */}
+                        {shapes.map(shape => {
+                            const filters = [];
+
+                            // Regular blur filter
+                            if (shape.blur && shape.blur > 0) {
+                                filters.push(
+                                    <filter key={`blur-${shape.id}`} id={`blur-${shape.id}`}>
+                                        <feGaussianBlur in="SourceGraphic" stdDeviation={shape.blur} />
+                                    </filter>
+                                );
+                            }
+
+                            // Glass effect filter (simple blur for now)
+                            if (shape.glassEffect) {
+                                const glassBlur = shape.glassBlur || 10;
+                                filters.push(
+                                    <filter key={`glass-${shape.id}`} id={`glass-${shape.id}`}>
+                                        <feGaussianBlur in="SourceGraphic" stdDeviation={glassBlur} />
+                                    </filter>
+                                );
+                            }
+
+                            return filters;
+                        })}
                     </defs>
                     {tree.map(root => renderShapeRecursiveWithSelection(root))}
 
@@ -868,6 +916,52 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                         <div style={{ position: 'absolute', right: -5, bottom: -5, width: 10, height: 10, background: '#10b981', cursor: 'nwse-resize', pointerEvents: 'auto', borderRadius: '50%' }} onMouseDown={(e) => handleResizeMouseDown(e, 'se')} />
                     </>
                 )}
+
+                {/* Glass Effect Overlay - CSS backdrop-filter for true glassmorphism */}
+                {shapes.filter(s => s.glassEffect).map(shape => {
+                    const glassBlur = shape.glassBlur || 10;
+                    const glassOpacity = shape.glassOpacity || 0.3;
+                    const rotation = shape.rotation || 0;
+                    const isSelected = selection.includes(shape.id);
+
+                    // Calculate corner radius for different shape types
+                    let borderRadius = '0px';
+                    if (shape.type === 'rect') {
+                        if (shape.cornerRadius) {
+                            borderRadius = `${shape.cornerRadius}px`;
+                        } else if (shape.cornerRadiusTL || shape.cornerRadiusTR || shape.cornerRadiusBR || shape.cornerRadiusBL) {
+                            borderRadius = `${shape.cornerRadiusTL || 0}px ${shape.cornerRadiusTR || 0}px ${shape.cornerRadiusBR || 0}px ${shape.cornerRadiusBL || 0}px`;
+                        }
+                    } else if (shape.type === 'ellipse') {
+                        borderRadius = '50%';
+                    }
+
+                    return (
+                        <div
+                            key={`glass-${shape.id}`}
+                            style={{
+                                position: 'absolute',
+                                left: shape.x,
+                                top: shape.y,
+                                width: shape.width,
+                                height: shape.height,
+                                transform: `rotate(${rotation}deg) scale(${shape.scaleX || 1}, ${shape.scaleY || 1})`,
+                                transformOrigin: 'center center',
+                                backdropFilter: `blur(${glassBlur}px)`,
+                                WebkitBackdropFilter: `blur(${glassBlur}px)`,
+                                backgroundColor: shape.fill ? `${shape.fill}${Math.round(glassOpacity * 255).toString(16).padStart(2, '0')}` : `rgba(255, 255, 255, ${glassOpacity})`,
+                                border: shape.stroke ? `${shape.strokeWidth || 1}px solid ${shape.stroke}` : `1px solid rgba(255, 255, 255, 0.3)`,
+                                borderRadius: borderRadius,
+                                boxShadow: isSelected ? '0 0 0 2px #6366f1' : 'none',
+                                cursor: 'move',
+                                transition: 'box-shadow 0.2s ease',
+                                pointerEvents: 'auto'
+                            }}
+                            onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
+                            onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)}
+                        />
+                    );
+                })}
             </div>
         </div>
     );

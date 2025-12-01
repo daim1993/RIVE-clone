@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>True Glassmorphism Demo - CSS Backdrop Filter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            overflow: hidden;
+        }
+
+        /* Animated background blobs */
+        .blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.7;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .blob1 {
+            width: 400px;
+            height: 400px;
+            background: #ff6b6b;
+            top: -100px;
+            left: -100px;
+            animation-delay: 0s;
+        }
+
+        .blob2 {
+            width: 350px;
+            height: 350px;
+            background: #4ecdc4;
+            bottom: -100px;
+            right: -100px;
+            animation-delay: 5s;
+        }
+
+        .blob3 {
+            width: 300px;
+            height: 300px;
+            background: #ffe66d;
+            top: 50%;
+            left: 50%;
+            animation-delay: 10s;
+        }
+
+        @keyframes float {
+
+            0%,
+            100% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            33% {
+                transform: translate(100px, -100px) scale(1.1);
+            }
+
+            66% {
+                transform: translate(-100px, 100px) scale(0.9);
+            }
+        }
+
+        .container {
+            position: relative;
+            width: 100%;
+            max-width: 1200px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            z-index: 1;
+        }
+
+        /* Glassmorphism card */
+        .glass-card {
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            background-color: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            background-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 48px 0 rgba(31, 38, 135, 0.5);
+            transform: translateY(-5px);
+        }
+
+        .glass-card h2 {
+            color: white;
+            margin-bottom: 15px;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .glass-card p {
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .glass-card code {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #fff;
+        }
+
+        .glass-button {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            padding: 12px 24px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .glass-button:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .info-box {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            background-color: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 16px;
+            padding: 20px;
+            max-width: 350px;
+            color: white;
+            z-index: 10;
+        }
+
+        .info-box h3 {
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .info-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .info-box li {
+            padding: 5px 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .info-box li::before {
+            content: "✓ ";
+            color: #4ecdc4;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .shapes-demo {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .glass-shape {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .glass-shape:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .glass-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+        }
+
+        .glass-square {
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+        }
+
+        .glass-rounded {
+            width: 100px;
+            height: 60px;
+            border-radius: 30px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Animated background blobs -->
+    <div class="blob blob1"></div>
+    <div class="blob blob2"></div>
+    <div class="blob blob3"></div>
+
+    <!-- Info box -->
+    <div class="info-box">
+        <h3>🎨 True Glassmorphism</h3>
+        <p style="font-size: 13px; margin-bottom: 15px;">
+            Using CSS <code>backdrop-filter</code> to blur the background behind elements.
+        </p>
+        <ul>
+            <li>Backdrop blur effect</li>
+            <li>Semi-transparent backgrounds</li>
+            <li>Subtle white borders</li>
+            <li>Smooth hover animations</li>
+            <li>GPU accelerated</li>
+        </ul>
+    </div>
+
+    <!-- Glass cards -->
+    <div class="container">
+        <div class="glass-card">
+            <h2>🌟 Backdrop Filter</h2>
+            <p>
+                The <code>backdrop-filter</code> CSS property blurs everything <strong>behind</strong> the element,
+                creating an authentic frosted glass effect.
+            </p>
+            <div class="shapes-demo">
+                <div class="glass-shape glass-circle"></div>
+                <div class="glass-shape glass-square"></div>
+                <div class="glass-shape glass-rounded"></div>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <h2>✨ In Your Rive Clone</h2>
+            <p>
+                When you enable "Glass Effect" on a shape:
+            </p>
+            <ul style="color: rgba(255,255,255,0.9); padding-left: 20px; line-height: 1.8;">
+                <li>Shape renders as HTML overlay</li>
+                <li>Uses CSS backdrop-filter</li>
+                <li>Blurs objects behind it</li>
+                <li>Fully interactive & draggable</li>
+            </ul>
+            <button class="glass-button" style="margin-top: 15px;">Try It Now →</button>
+        </div>
+
+        <div class="glass-card">
+            <h2>🎯 Perfect For</h2>
+            <p>
+                Glassmorphism creates depth and hierarchy in modern UI designs:
+            </p>
+            <ul style="color: rgba(255,255,255,0.9); padding-left: 20px; line-height: 1.8;">
+                <li>Modal overlays</li>
+                <li>Navigation bars</li>
+                <li>Card components</li>
+                <li>Floating panels</li>
+                <li>Premium UI elements</li>
+            </ul>
+        </div>
+    </div>
+</body>
+
+</html>

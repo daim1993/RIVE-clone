@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glass Blur Effect Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+        }
+
+        .demo-text {
+            position: absolute;
+            font-size: 120px;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 2px 2px 20px rgba(0, 0, 0, 0.3);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+        }
+
+        .info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 12px;
+            color: white;
+            max-width: 300px;
+        }
+
+        .info h2 {
+            margin-top: 0;
+        }
+
+        .info code {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="info">
+        <h2>🎨 Glass Blur Effect</h2>
+        <p>This demonstrates the <code>backdrop-filter: blur()</code> effect similar to Framer.</p>
+        <p>The glass panel blurs the content <strong>behind</strong> it, creating a frosted glass effect.</p>
+        <p><strong>In your Rive Clone:</strong></p>
+        <ul style="font-size: 14px;">
+            <li>Select a shape</li>
+            <li>Enable "Glass Effect" in Properties</li>
+            <li>Adjust "Glass Blur" slider</li>
+            <li>Adjust "Glass Opacity" for transparency</li>
+        </ul>
+    </div>
+
+    <div class="container">
+        <div class="demo-text">RIVE</div>
+
+        <svg width="800" height="600">
+            <defs>
+                <!-- Glass effect filter -->
+                <filter id="glass-blur" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur in="BackgroundImage" stdDeviation="15" result="blurred" />
+                    <feComposite in="blurred" in2="SourceGraphic" operator="in" result="blurredShape" />
+                    <feBlend in="blurredShape" in2="SourceGraphic" mode="normal" />
+                </filter>
+            </defs>
+
+            <!-- Enable background for backdrop blur -->
+            <rect x="0" y="0" width="100%" height="100%" fill="none" style="enable-background: new;" />
+
+            <!-- Glass rectangle with backdrop blur -->
+            <rect x="200" y="200" width="400" height="200" rx="20" fill="rgba(255, 255, 255, 0.2)"
+                stroke="rgba(255, 255, 255, 0.3)" stroke-width="2" filter="url(#glass-blur)" />
+
+            <!-- Glass circle -->
+            <circle cx="150" cy="150" r="80" fill="rgba(255, 255, 255, 0.15)" stroke="rgba(255, 255, 255, 0.4)"
+                stroke-width="2" filter="url(#glass-blur)" />
+
+            <!-- Another glass shape -->
+            <ellipse cx="650" cy="450" rx="100" ry="80" fill="rgba(255, 255, 255, 0.18)"
+                stroke="rgba(255, 255, 255, 0.35)" stroke-width="2" filter="url(#glass-blur)" />
+        </svg>
+    </div>
+</body>
+
+</html>

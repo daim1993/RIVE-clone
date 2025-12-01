@@ -370,8 +370,115 @@ const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }
                         </div>
                     </div>
                 </div>
+
+                <div className="property-group">
+                    <span className="property-label">Effects</span>
+
+                    {/* Blur */}
+                    <div className="property-row">
+                        <div className="input-group">
+                            <label>Blur</label>
+                            <input
+                                type="range"
+                                min="0"
+                                max="50"
+                                step="1"
+                                value={getValue('blur') || 0}
+                                onChange={(e) => handleChange('blur', parseFloat(e.target.value))}
+                                style={{ width: '100%' }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Glass Effect Toggle */}
+                    <div className="property-row">
+                        <div className="input-group" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <label style={{ marginBottom: 0 }}>Glass Effect</label>
+                            <label style={{
+                                position: 'relative',
+                                display: 'inline-block',
+                                width: '40px',
+                                height: '20px',
+                                cursor: 'pointer',
+                                margin: 0
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={getValue('glassEffect') || false}
+                                    onChange={(e) => handleChange('glassEffect', e.target.checked)}
+                                    style={{
+                                        opacity: 0,
+                                        width: 0,
+                                        height: 0
+                                    }}
+                                />
+                                <span style={{
+                                    position: 'absolute',
+                                    cursor: 'pointer',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    backgroundColor: getValue('glassEffect') ? 'var(--accent)' : 'var(--border-color)',
+                                    transition: '0.3s',
+                                    borderRadius: '20px'
+                                }}>
+                                    <span style={{
+                                        position: 'absolute',
+                                        content: '',
+                                        height: '14px',
+                                        width: '14px',
+                                        left: getValue('glassEffect') ? '23px' : '3px',
+                                        bottom: '3px',
+                                        backgroundColor: 'white',
+                                        transition: '0.3s',
+                                        borderRadius: '50%'
+                                    }}></span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    {/* Glass Effect Options */}
+                    {getValue('glassEffect') && (
+                        <>
+                            {/* Glass Blur */}
+                            <div className="property-row">
+                                <div className="input-group">
+                                    <label>Glass Blur</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="30"
+                                        step="1"
+                                        value={getValue('glassBlur') || 10}
+                                        onChange={(e) => handleChange('glassBlur', parseFloat(e.target.value))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Glass Opacity */}
+                            <div className="property-row">
+                                <div className="input-group">
+                                    <label>Glass Opacity</label>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1"
+                                        step="0.05"
+                                        value={getValue('glassOpacity') || 0.3}
+                                        onChange={(e) => handleChange('glassOpacity', parseFloat(e.target.value))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );
 };
 window.Properties = Properties;
+
