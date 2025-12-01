@@ -178,3 +178,4 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
         </div>
     );
 };
+window.Hierarchy = Hierarchy;

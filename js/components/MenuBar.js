@@ -102,3 +102,4 @@ const MenuBar = ({ onNew, onOpen, onExport, onUndo, onRedo, canvasSize, setCanva
         </div>
     );
 };
+window.MenuBar = MenuBar;

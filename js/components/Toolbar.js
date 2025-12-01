@@ -54,3 +54,4 @@ const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG }) => {
         </div>
     );
 };
+window.Toolbar = Toolbar;

@@ -208,3 +208,4 @@ const Timeline = ({
         </div>
     );
 };
+window.Timeline = Timeline;

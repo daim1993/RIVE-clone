@@ -872,3 +872,4 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         </div>
     );
 };
+window.Canvas = Canvas;

@@ -1,5 +1,4 @@
-import React from 'react';
-import * as Icons from '../icons';
+
 
 const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }) => {
     const selectedShapes = shapes.filter(s => selection.includes(s.id));
@@ -371,3 +370,4 @@ const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }
                 </div>
                 );
 };
+                window.Properties = Properties;
