@@ -1,5 +1,7 @@
 
 
+const Icons = window.Icons;
+
 const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }) => {
     const selectedShapes = shapes.filter(s => selection.includes(s.id));
     const firstShape = selectedShapes[0];
@@ -368,6 +370,8 @@ const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }
                         </div>
                     </div>
                 </div>
-                );
+            </div>
+        </div>
+    );
 };
-                window.Properties = Properties;
+window.Properties = Properties;

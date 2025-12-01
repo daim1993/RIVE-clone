@@ -1,4 +1,5 @@
 const { useState, useEffect, useRef } = React;
+const Icons = window.Icons;
 
 const App = () => {
     const [shapes, setShapes] = useState([
@@ -18,8 +19,8 @@ const App = () => {
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
 
     const activeAnimation = animations.find(a => a.id === activeAnimationId) || animations[0];
-    const duration = activeAnimation.duration;
-    const keyframes = activeAnimation.keyframes;
+    const duration = activeAnimation?.duration || 0;
+    const keyframes = activeAnimation?.keyframes || [];
 
     const setDuration = (newDuration) => {
         const newAnimations = animations.map(a => a.id === activeAnimationId ? { ...a, duration: newDuration } : a);

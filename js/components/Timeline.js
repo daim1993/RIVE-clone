@@ -1,3 +1,4 @@
+const Icons = window.Icons;
 const Timeline = ({
     isPlaying, setIsPlaying, currentTime, setCurrentTime,
     duration, setDuration, shapes, selection,

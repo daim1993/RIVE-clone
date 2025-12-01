@@ -1,4 +1,4 @@
-const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, onUpdateEnd, canvasSize, compact = false, setCanvasSize }) => {
+const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, updateShapes, onUpdateEnd, canvasSize, compact = false, setCanvasSize }) => {
     const [isDragging, setIsDragging] = React.useState(false);
     const [isResizing, setIsResizing] = React.useState(false);
     const [isRotating, setIsRotating] = React.useState(false);

@@ -1,3 +1,4 @@
+const Icons = window.Icons;
 const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) => {
     const [draggedId, setDraggedId] = React.useState(null);
     const [expanded, setExpanded] = React.useState({}); // Map of id -> boolean

@@ -1,3 +1,4 @@
+const Icons = window.Icons;
 const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG }) => {
     const fileInputRef = React.useRef(null);
     const svgInputRef = React.useRef(null);
