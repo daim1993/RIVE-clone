@@ -1,7 +1,8 @@
 const Icons = window.Icons;
-const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) => {
+const Hierarchy = ({ shapes, selection, setSelection, onReparent, onMoveShape, onAddGroup }) => {
     const [draggedId, setDraggedId] = React.useState(null);
     const [expanded, setExpanded] = React.useState({}); // Map of id -> boolean
+    const [dropTarget, setDropTarget] = React.useState(null); // { id, position: 'before' | 'after' | 'inside' }
 
     // Initialize expanded state for new items (default expanded)
     React.useEffect(() => {
@@ -40,7 +41,20 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
             }
         });
 
-        return roots;
+        // Sort children by index in original array (which is render order)
+        // But we want to display in REVERSE order (Front on Top)
+        // So we reverse the arrays
+        const reverseChildren = (nodes) => {
+            nodes.reverse();
+            nodes.forEach(node => {
+                if (node.children.length > 0) {
+                    reverseChildren(node.children);
+                }
+            });
+            return nodes;
+        };
+
+        return reverseChildren(roots);
     };
 
     const tree = buildTree(shapes);
@@ -51,9 +65,40 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
         e.dataTransfer.effectAllowed = 'move';
     };
 
-    const handleDragOver = (e) => {
+    const handleDragOver = (e, targetId, hasChildren, isExpanded) => {
         e.preventDefault();
+        e.stopPropagation();
+
+        if (!targetId) return; // Ignore drag over container for now, or handle separately
+
+        const rect = e.currentTarget.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const height = rect.height;
+
+        // Thresholds for before/inside/after
+        // If it's a group and expanded, we might want to drop inside more easily?
+        // Simple logic: Top 25% = Before, Bottom 25% = After, Middle 50% = Inside (if group)
+
+        let position = 'inside';
+
+        if (hasChildren || e.currentTarget.classList.contains('group-item')) {
+            if (y < height * 0.25) position = 'before';
+            else if (y > height * 0.75) position = 'after';
+            else position = 'inside';
+        } else {
+            // For leaf nodes, split 50/50
+            if (y < height * 0.5) position = 'before';
+            else position = 'after';
+        }
+
+        // If dragging over itself or parent/child invalid logic, maybe handle visual feedback differently?
+        // For now just set state
+        setDropTarget({ id: targetId, position });
         e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleDragLeave = (e) => {
+        // setDropTarget(null); // This flickers too much, need better logic or just clear on drop
     };
 
     const handleDrop = (e, targetId) => {
@@ -61,11 +106,21 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
         e.stopPropagation();
         const droppedId = parseInt(e.dataTransfer.getData('text/plain'));
 
-        if (droppedId === targetId) return;
-
-        if (onReparent) {
-            onReparent(droppedId, targetId);
+        if (droppedId === targetId) {
+            setDropTarget(null);
+            setDraggedId(null);
+            return;
         }
+
+        if (onMoveShape && dropTarget) {
+            onMoveShape(droppedId, dropTarget.id, dropTarget.position);
+        } else if (onReparent && !dropTarget) {
+            // Fallback or root drop
+            // If dropped on empty space, maybe move to top level?
+            // onMoveShape(droppedId, null, 'after'); // Implementation detail
+        }
+
+        setDropTarget(null);
         setDraggedId(null);
     };
 
@@ -100,15 +155,26 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
         const isExpanded = expanded[item.id];
         const isDragged = draggedId === item.id;
 
+        const isDropTarget = dropTarget && dropTarget.id === item.id;
+        const dropPosition = isDropTarget ? dropTarget.position : null;
+
+        const itemStyle = {
+            borderTop: dropPosition === 'before' ? '2px solid var(--accent)' : '2px solid transparent',
+            borderBottom: dropPosition === 'after' ? '2px solid var(--accent)' : '2px solid transparent',
+            background: dropPosition === 'inside' ? 'rgba(99, 102, 241, 0.2)' : (isSelected ? 'var(--selection)' : 'transparent'),
+            opacity: isDragged ? 0.5 : 1
+        };
+
         return (
             <div key={item.id} className="tree-node">
                 <div
-                    className={`tree-item ${isSelected ? 'selected' : ''} ${isDragged ? 'dragged' : ''}`}
+                    className={`tree-item ${isSelected ? 'selected' : ''} ${isDragged ? 'dragged' : ''} ${item.type === 'group' ? 'group-item' : ''}`}
                     onClick={(e) => handleSelect(e, item.id)}
                     draggable
                     onDragStart={(e) => handleDragStart(e, item.id)}
-                    onDragOver={handleDragOver}
+                    onDragOver={(e) => handleDragOver(e, item.id, item.type === 'group', isExpanded)}
                     onDrop={(e) => handleDrop(e, item.id)}
+                    style={itemStyle}
                 >
                     {/* Indentation and Toggle */}
                     <div className="tree-item-content" style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', paddingLeft: depth * 12 }}>
@@ -116,7 +182,9 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
                         {/* Toggle Arrow */}
                         <div
                             className="tree-toggle"
-                            onClick={(e) => hasChildren && toggleExpand(e, item.id)}
+                            onClick={(e) => {
+                                if (hasChildren || item.type === 'group') toggleExpand(e, item.id);
+                            }}
                             style={{
                                 width: '16px',
                                 height: '16px',
@@ -124,10 +192,10 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 cursor: 'pointer',
-                                opacity: hasChildren ? 1 : 0
+                                opacity: (hasChildren || item.type === 'group') ? 1 : 0
                             }}
                         >
-                            {hasChildren && (isExpanded ? <Icons.ChevronDown /> : <Icons.ChevronRight />)}
+                            {(hasChildren || item.type === 'group') && (isExpanded ? <Icons.ChevronDown /> : <Icons.ChevronRight />)}
                         </div>
 
                         {/* Icon */}
@@ -170,9 +238,22 @@ const Hierarchy = ({ shapes, selection, setSelection, onReparent, onAddGroup }) 
             </div>
             <div
                 className="panel-content"
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, null)} // Drop on root
-                style={{ padding: '8px 0' }}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                }}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    // If dropped on empty space, move to top level (end of array = top of list)
+                    const droppedId = parseInt(e.dataTransfer.getData('text/plain'));
+                    if (onMoveShape) {
+                        // Move to root, at the end (Top)
+                        // We can simulate this by moving "after" the last root item? 
+                        // Or just handle it in App.js if targetId is null.
+                        // For now, let's just ignore root drop or map it to "move to top"
+                    }
+                }}
+                style={{ padding: '8px 0', minHeight: '100px' }}
             >
                 {tree.map(item => renderTreeItem(item))}
             </div>

@@ -17,6 +17,7 @@ const App = () => {
     ]);
     const [activeAnimationId, setActiveAnimationId] = useState(1);
     const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
+    const [isTimelineVisible, setIsTimelineVisible] = useState(false);
 
     const activeAnimation = animations.find(a => a.id === activeAnimationId) || animations[0];
     const duration = activeAnimation?.duration || 0;
@@ -465,6 +466,70 @@ const App = () => {
         recordHistory(newShapes, animations);
     };
 
+    const handleMoveShape = (draggedId, targetId, position) => {
+        // position: 'before', 'after', 'inside'
+        if (draggedId === targetId) return;
+
+        const draggedShape = shapes.find(s => s.id === draggedId);
+        const targetShape = shapes.find(s => s.id === targetId);
+        if (!draggedShape) return;
+
+        let newShapes = [...shapes];
+
+        // Remove dragged shape from array
+        newShapes = newShapes.filter(s => s.id !== draggedId);
+
+        // Calculate new parentId
+        let newParentId = draggedShape.parentId;
+
+        if (position === 'inside') {
+            // Check for circular dependency
+            let current = targetShape;
+            while (current) {
+                if (current.id === draggedId) return;
+                current = shapes.find(s => s.id === current.parentId);
+            }
+            newParentId = targetId;
+        } else if (targetShape) {
+            // If moving before/after, inherit parent of target
+            newParentId = targetShape.parentId;
+        }
+
+        // Update dragged shape parent
+        const updatedDraggedShape = { ...draggedShape, parentId: newParentId };
+
+        if (position === 'inside') {
+            // Add to end of children of target (which means end of array for that parent)
+            // But since we want "Front" on "Top", and "Front" is end of array...
+            // Wait, if we render in reverse order (Front on Top), then:
+            // Top of list = End of Array (Front)
+            // Bottom of list = Start of Array (Back)
+
+            // So if we drop "inside", we usually want it to be the top-most child (Front)?
+            // Or bottom-most? Standard is usually append to end (Front).
+            newShapes.push(updatedDraggedShape);
+        } else {
+            // Find index of target in the *filtered* array
+            const targetIndex = newShapes.findIndex(s => s.id === targetId);
+            if (targetIndex !== -1) {
+                if (position === 'before') {
+                    // "Before" in the LIST (Top) means "After" in the ARRAY (Front)
+                    // So we insert AFTER the target index
+                    newShapes.splice(targetIndex + 1, 0, updatedDraggedShape);
+                } else {
+                    // "After" in the LIST (Bottom) means "Before" in the ARRAY (Back)
+                    // So we insert BEFORE the target index
+                    newShapes.splice(targetIndex, 0, updatedDraggedShape);
+                }
+            } else {
+                newShapes.push(updatedDraggedShape);
+            }
+        }
+
+        setShapes(newShapes);
+        recordHistory(newShapes, animations);
+    };
+
     const handleAddGroup = () => {
         const newGroup = {
             id: Date.now(),
@@ -482,9 +547,7 @@ const App = () => {
     };
 
     return (
-        <div className="app-container" style={{
-            gridTemplateRows: mode === 'animate' ? 'var(--header-height) 30px 1fr var(--timeline-height)' : 'var(--header-height) 30px 1fr 0px'
-        }}>
+        <div className="app-container">
             <div className="header">
                 <div className="logo">
                     <Icons.Layers />
@@ -499,7 +562,10 @@ const App = () => {
                     </div>
                     <div
                         className={`mode-btn ${mode === 'animate' ? 'active' : ''}`}
-                        onClick={() => setMode('animate')}
+                        onClick={() => {
+                            setMode('animate');
+                            setIsTimelineVisible(true);
+                        }}
                     >
                         Animate
                     </div>
@@ -536,326 +602,24 @@ const App = () => {
                 selection={selection}
                 setSelection={setSelection}
                 onReparent={handleReparent}
+                onMoveShape={handleMoveShape}
                 onAddGroup={handleAddGroup}
             />
 
             {
                 mode === 'animate' ? (
-                    <div className="canvas-area" style={{ gridArea: 'canvas', background: '#121212', display: 'flex', gap: '20px', padding: '20px' }}>
-                        {/* Left Panel - State Machine */}
-                        <div style={{
-                            width: '250px',
-                            background: 'var(--bg-panel)',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '16px'
-                        }}>
-                            {/* Inputs Section */}
-                            <div>
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    marginBottom: '8px'
-                                }}>
-                                    <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                                        Inputs
-                                    </h3>
-                                    <button
-                                        className="btn"
-                                        style={{ padding: '2px 6px', fontSize: '11px' }}
-                                        onClick={() => {
-                                            const newInput = {
-                                                id: Date.now(),
-                                                name: `input${stateMachineInputs.length + 1}`,
-                                                type: 'boolean',
-                                                value: false
-                                            };
-                                            setStateMachineInputs([...stateMachineInputs, newInput]);
-                                        }}
-                                    >
-                                        <Icons.Plus />
-                                    </button>
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {stateMachineInputs.map(input => (
-                                        <div key={input.id} style={{
-                                            background: 'var(--bg-app)',
-                                            padding: '8px',
-                                            borderRadius: '4px',
-                                            fontSize: '11px'
-                                        }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{input.name}</span>
-                                                <span style={{
-                                                    color: 'var(--text-secondary)',
-                                                    fontSize: '10px',
-                                                    background: 'var(--bg-panel)',
-                                                    padding: '2px 6px',
-                                                    borderRadius: '3px'
-                                                }}>
-                                                    {input.type}
-                                                </span>
-                                            </div>
-                                            {input.type === 'boolean' && (
-                                                <div style={{ marginTop: '4px' }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={input.value}
-                                                        onChange={(e) => {
-                                                            setStateMachineInputs(stateMachineInputs.map(i =>
-                                                                i.id === input.id ? { ...i, value: e.target.checked } : i
-                                                            ));
-                                                        }}
-                                                    />
-                                                    <span style={{ marginLeft: '6px', color: 'var(--text-secondary)' }}>
-                                                        {input.value ? 'true' : 'false'}
-                                                    </span>
-                                                </div>
-                                            )}
-                                            {input.type === 'number' && (
-                                                <input
-                                                    type="number"
-                                                    value={input.value}
-                                                    onChange={(e) => {
-                                                        setStateMachineInputs(stateMachineInputs.map(i =>
-                                                            i.id === input.id ? { ...i, value: Number(e.target.value) } : i
-                                                        ));
-                                                    }}
-                                                    style={{
-                                                        marginTop: '4px',
-                                                        width: '100%',
-                                                        background: 'var(--bg-panel)',
-                                                        border: '1px solid var(--border-color)',
-                                                        color: 'var(--text-primary)',
-                                                        padding: '4px',
-                                                        borderRadius: '3px',
-                                                        fontSize: '11px'
-                                                    }}
-                                                />
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Listeners Section */}
-                            <div>
-                                <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    marginBottom: '8px'
-                                }}>
-                                    <h3 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                                        Listeners
-                                    </h3>
-                                    <button
-                                        className="btn"
-                                        style={{ padding: '2px 6px', fontSize: '11px' }}
-                                        onClick={() => {
-                                            const newListener = {
-                                                id: Date.now(),
-                                                name: `listener${stateMachineListeners.length + 1}`,
-                                                type: 'trigger'
-                                            };
-                                            setStateMachineListeners([...stateMachineListeners, newListener]);
-                                        }}
-                                    >
-                                        <Icons.Plus />
-                                    </button>
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {stateMachineListeners.map(listener => (
-                                        <div key={listener.id} style={{
-                                            background: 'var(--bg-app)',
-                                            padding: '8px',
-                                            borderRadius: '4px',
-                                            fontSize: '11px',
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center'
-                                        }}>
-                                            <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{listener.name}</span>
-                                            <button
-                                                style={{
-                                                    background: 'var(--accent)',
-                                                    border: 'none',
-                                                    color: 'white',
-                                                    padding: '3px 8px',
-                                                    borderRadius: '3px',
-                                                    fontSize: '10px',
-                                                    cursor: 'pointer'
-                                                }}
-                                                onClick={() => {
-                                                    console.log(`Triggered: ${listener.name}`);
-                                                    // Here you would trigger the actual state machine transition
-                                                }}
-                                            >
-                                                Fire
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Center - State Machine Graph */}
-                        <div style={{
-                            flex: 1,
-                            background: 'var(--bg-panel)',
-                            borderRadius: '8px',
-                            padding: '20px',
-                            position: 'relative',
-                            minHeight: '400px'
-                        }}>
-                            <div style={{ color: 'var(--text-secondary)', fontSize: '12px', marginBottom: '16px', fontWeight: 600 }}>
-                                State Machine
-                            </div>
-
-                            {/* Entry Node */}
-                            <div style={{
-                                position: 'absolute',
-                                top: '80px',
-                                left: '50px',
-                                padding: '12px 24px',
-                                background: 'var(--accent)',
-                                border: '2px solid var(--accent)',
-                                borderRadius: '24px',
-                                color: 'white',
-                                fontSize: '12px',
-                                fontWeight: 600
-                            }}>
-                                Entry
-                            </div>
-
-                            {/* Animation State Nodes */}
-                            <svg style={{
-                                position: 'absolute',
-                                top: 0,
-                                left: 0,
-                                width: '100%',
-                                height: '100%',
-                                pointerEvents: 'none'
-                            }}>
-                                {/* Draw connections */}
-                                {animations.map((anim, i) => {
-                                    const startX = 140;
-                                    const startY = 95;
-
-                                    let x1, y1, x2, y2;
-
-                                    if (i === 0) {
-                                        x1 = 140; y1 = 95;
-                                        x2 = (anim.x || 200); y2 = (anim.y || 70) + 20;
-                                    } else {
-                                        const prev = animations[i - 1];
-                                        x1 = (prev.x || 200 + (i - 1) * 180) + 100;
-                                        y1 = (prev.y || 70) + 20;
-                                        x2 = (anim.x || 200 + i * 180);
-                                        y2 = (anim.y || 70) + 20;
-                                    }
-
-                                    return (
-                                        <g key={anim.id}>
-                                            <line
-                                                x1={x1}
-                                                y1={y1}
-                                                x2={x2}
-                                                y2={y2}
-                                                stroke="var(--text-secondary)"
-                                                strokeWidth="2"
-                                                markerEnd="url(#arrowhead)"
-                                            />
-                                        </g>
-                                    );
-                                })}
-                                <defs>
-                                    <marker
-                                        id="arrowhead"
-                                        markerWidth="10"
-                                        markerHeight="10"
-                                        refX="9"
-                                        refY="3"
-                                        orient="auto"
-                                    >
-                                        <polygon points="0 0, 10 3, 0 6" fill="var(--text-secondary)" />
-                                    </marker>
-                                </defs>
-                            </svg>
-
-                            {animations.map((anim, i) => (
-                                <div
-                                    key={anim.id}
-                                    style={{
-                                        position: 'absolute',
-                                        top: `${anim.y || 70}px`,
-                                        left: `${anim.x || 200 + i * 180}px`,
-                                        padding: '12px 24px',
-                                        background: activeAnimationId === anim.id ? 'var(--selection)' : 'var(--bg-app)',
-                                        border: `2px solid ${activeAnimationId === anim.id ? 'var(--accent)' : 'var(--border-color)'}`,
-                                        borderRadius: '24px',
-                                        color: activeAnimationId === anim.id ? 'var(--accent)' : 'var(--text-primary)',
-                                        fontSize: '12px',
-                                        fontWeight: 500,
-                                        cursor: 'grab',
-                                        userSelect: 'none',
-                                        transition: 'border-color 0.2s, background 0.2s'
-                                    }}
-                                    onMouseDown={(e) => handleNodeMouseDown(e, anim.id)}
-                                    onClick={() => setActiveAnimationId(anim.id)}
-                                >
-                                    {anim.name}
-                                </div>
-                            ))}
-
-                            {/* Instructions */}
-                            <div style={{
-                                position: 'absolute',
-                                bottom: '20px',
-                                left: '20px',
-                                right: '20px',
-                                padding: '12px',
-                                background: 'var(--bg-app)',
-                                borderRadius: '6px',
-                                border: '1px solid var(--border-color)',
-                                fontSize: '11px',
-                                color: 'var(--text-secondary)'
-                            }}>
-                                <strong style={{ color: 'var(--text-primary)' }}>State Machine:</strong> Use inputs to control animation parameters,
-                                and listeners to trigger transitions between states. Drag animation nodes to reposition them.
-                            </div>
-                        </div>
-
-                        {/* Right Panel - Canvas Preview */}
-                        <div style={{
-                            width: '400px',
-                            background: 'var(--bg-panel)',
-                            borderRadius: '8px',
-                            padding: '12px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '12px'
-                        }}>
-                            <div style={{ color: 'var(--text-secondary)', fontSize: '12px', fontWeight: 600 }}>
-                                Preview
-                            </div>
-                            <Canvas
-                                shapes={shapes}
-                                selection={selection}
-                                setSelection={setSelection}
-                                tool={tool}
-                                addShape={addShape}
-                                updateShape={updateShape}
-                                onUpdateEnd={() => recordHistory(shapes, animations)}
-                                canvasSize={{ width: 376, height: 300 }}
-                                compact={true}
-                                setCanvasSize={setCanvasSize}
-                            />
-                        </div>
-                    </div>
+                    <Canvas
+                        shapes={shapes}
+                        selection={selection}
+                        setSelection={setSelection}
+                        tool={tool}
+                        addShape={addShape}
+                        updateShape={updateShape}
+                        updateShapes={updateShapes}
+                        onUpdateEnd={() => recordHistory(shapes, animations)}
+                        canvasSize={canvasSize}
+                        setCanvasSize={setCanvasSize}
+                    />
                 ) : (
                     <Canvas
                         shapes={shapes}
@@ -881,7 +645,7 @@ const App = () => {
             />
 
             {
-                mode === 'animate' && (
+                (mode === 'animate' && isTimelineVisible) && (
                     <Timeline
                         isPlaying={isPlaying}
                         setIsPlaying={setIsPlaying}
@@ -898,10 +662,12 @@ const App = () => {
                         activeAnimationId={activeAnimationId}
                         setActiveAnimationId={setActiveAnimationId}
                         addAnimation={addAnimation}
+                        isVisible={isTimelineVisible}
+                        onToggle={() => setIsTimelineVisible(!isTimelineVisible)}
                     />
                 )
             }
-        </div >
+        </div>
     );
 };
 window.App = App;

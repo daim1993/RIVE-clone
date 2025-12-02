@@ -16,6 +16,8 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     const [artboardOffset, setArtboardOffset] = React.useState({ x: 0, y: 0 });
     const [isDraggingArtboard, setIsDraggingArtboard] = React.useState(false);
     const [draggedShapeId, setDraggedShapeId] = React.useState(null);
+    const [isSelecting, setIsSelecting] = React.useState(false);
+    const [selectionRect, setSelectionRect] = React.useState(null); // { x, y, width, height }
     const canvasRef = React.useRef(null);
     const containerRef = React.useRef(null);
 
@@ -224,7 +226,13 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             setIsDragging(true);
             setDragStart(coords);
         } else if (tool === 'select') {
-            setSelection([]);
+            // Start drag selection
+            setIsSelecting(true);
+            setIsDragging(true);
+            setDragStart(coords);
+            if (!e.shiftKey) {
+                setSelection([]);
+            }
             setIsEditingPath(false);
         } else if (tool === 'artboard') {
             // Artboard resize start
@@ -349,6 +357,17 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         setResizeHandle(handle);
         const coords = getCanvasCoords(e);
         setDragStart(coords);
+
+        // Store initial bounds and shapes for multi-selection
+        const bounds = calculateMultiSelectionBounds();
+        const initialShapes = {};
+        selection.forEach(id => {
+            const shape = shapes.find(s => s.id === id);
+            if (shape) {
+                initialShapes[id] = { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+            }
+        });
+        setDragInfo({ initialBounds: bounds, initialShapes });
     };
 
     const handleRotateMouseDown = (e) => {
@@ -356,6 +375,23 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         setIsRotating(true);
         const coords = getCanvasCoords(e);
         setDragStart(coords);
+
+        // Store initial bounds and shapes for multi-selection
+        const bounds = calculateMultiSelectionBounds();
+        const initialShapes = {};
+        selection.forEach(id => {
+            const shape = shapes.find(s => s.id === id);
+            if (shape) {
+                initialShapes[id] = {
+                    x: shape.x,
+                    y: shape.y,
+                    width: shape.width,
+                    height: shape.height,
+                    rotation: shape.rotation || 0
+                };
+            }
+        });
+        setDragInfo({ initialBounds: bounds, initialShapes });
     };
 
     const handleMouseMove = (e) => {
@@ -384,6 +420,16 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             return;
         }
 
+        // Selection rectangle dragging
+        if (isSelecting && tool === 'select') {
+            const rectX = Math.min(dragStart.x, coords.x);
+            const rectY = Math.min(dragStart.y, coords.y);
+            const rectWidth = Math.abs(coords.x - dragStart.x);
+            const rectHeight = Math.abs(coords.y - dragStart.y);
+            setSelectionRect({ x: rectX, y: rectY, width: rectWidth, height: rectHeight });
+            return;
+        }
+
         // Artboard resizing
         if (tool === 'artboard' && isResizing && resizeHandle) {
             const newSize = { ...canvasSize };
@@ -406,32 +452,79 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
 
         // Path point editing
         if (isEditingPath && draggedPointIndex !== null && dragInfo && dragInfo.initialPoints) {
-            const newPoints = dragInfo.initialPoints.map(p => ({ ...p }));
-            const point = newPoints[draggedPointIndex];
+            const dx = coords.x - dragInfo.startX;
+            const dy = coords.y - dragInfo.startY;
 
-            if (draggedHandleType === 'out') {
-                // Dragging outgoing handle
-                point.hx = coords.x - (selectedShape.x + point.x);
-                point.hy = coords.y - (selectedShape.y + point.y);
-            } else if (draggedHandleType === 'in') {
-                // Dragging incoming handle (mirror of outgoing)
-                point.hx = -(coords.x - (selectedShape.x + point.x));
-                point.hy = -(coords.y - (selectedShape.y + point.y));
-            } else {
-                // Dragging the point itself
-                point.x += dx;
-                point.y += dy;
-            }
+            // We need to work in ABSOLUTE coordinates to recalculate bounds
+            const initialShapeX = dragInfo.shapeX;
+            const initialShapeY = dragInfo.shapeY;
 
-            // Rebuild path data
-            const pathData = newPoints.map((p, i) => {
+            // 1. Calculate new absolute positions for ALL points
+            const absolutePoints = dragInfo.initialPoints.map((p, i) => {
+                let absX = initialShapeX + p.x;
+                let absY = initialShapeY + p.y;
+                let hx = p.hx;
+                let hy = p.hy;
+
+                if (i === draggedPointIndex) {
+                    if (draggedHandleType === 'out') {
+                        // Dragging outgoing handle
+                        // Handle is relative to point. Point hasn't moved, but handle has.
+                        // We need to calculate new hx/hy based on mouse position
+                        // Mouse pos = coords.x, coords.y
+                        // Point pos (absolute) = initialShapeX + p.x, initialShapeY + p.y
+                        hx = coords.x - (initialShapeX + p.x);
+                        hy = coords.y - (initialShapeY + p.y);
+                    } else if (draggedHandleType === 'in') {
+                        // Dragging incoming handle (mirror)
+                        hx = -(coords.x - (initialShapeX + p.x));
+                        hy = -(coords.y - (initialShapeY + p.y));
+                    } else {
+                        // Dragging the point itself
+                        absX += dx;
+                        absY += dy;
+                    }
+                }
+                return { x: absX, y: absY, hx, hy };
+            });
+
+            // 2. Calculate new bounding box
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            absolutePoints.forEach(p => {
+                minX = Math.min(minX, p.x);
+                minY = Math.min(minY, p.y);
+                maxX = Math.max(maxX, p.x);
+                maxY = Math.max(maxY, p.y);
+
+                // Also account for handles? Usually bounds are just points, but for precise SVG bounds 
+                // we might care about control points. For now, let's stick to anchor points for the "frame"
+                // to match standard vector tool behavior (frame follows anchors).
+            });
+
+            // 3. Normalize points to new bounding box
+            const newWidth = Math.max(1, maxX - minX);
+            const newHeight = Math.max(1, maxY - minY);
+
+            const normalizedPoints = absolutePoints.map(p => ({
+                x: p.x - minX,
+                y: p.y - minY,
+                hx: p.hx,
+                hy: p.hy
+            }));
+
+            // 4. Update shape
+            const pathData = normalizedPoints.map((p, i) => {
                 if (i === 0) return `M ${p.x} ${p.y}`;
-                const prev = newPoints[i - 1];
+                const prev = normalizedPoints[i - 1];
                 return `C ${prev.x + prev.hx} ${prev.y + prev.hy} ${p.x - p.hx} ${p.y - p.hy} ${p.x} ${p.y}`;
             }).join(' ');
 
             updateShape(selectedShape.id, {
-                pathPoints: newPoints,
+                x: minX,
+                y: minY,
+                width: newWidth,
+                height: newHeight,
+                pathPoints: normalizedPoints,
                 pathData: selectedShape.fill !== 'none' ? pathData + ' Z' : pathData
             });
             return;
@@ -477,37 +570,142 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             });
 
             // Do NOT update dragInfo here to prevent drift
-        } else if (isResizing && resizeHandle) {
-            const newProps = { ...selectedShape };
+        } else if (isResizing && resizeHandle && dragInfo && dragInfo.initialBounds) {
+            const bounds = dragInfo.initialBounds;
+            const initialShapes = dragInfo.initialShapes;
+
+            // Calculate new bounds based on handle drag
+            let newBounds = { ...bounds };
+
             switch (resizeHandle) {
-                case 'nw': newProps.x += dx; newProps.y += dy; newProps.width -= dx; newProps.height -= dy; break;
-                case 'ne': newProps.y += dy; newProps.width += dx; newProps.height -= dy; break;
-                case 'sw': newProps.x += dx; newProps.width -= dx; newProps.height += dy; break;
-                case 'se': newProps.width += dx; newProps.height += dy; break;
+                case 'nw':
+                    newBounds.width = bounds.width - dx;
+                    newBounds.height = bounds.height - dy;
+                    newBounds.x = bounds.x + dx;
+                    newBounds.y = bounds.y + dy;
+                    break;
+                case 'ne':
+                    newBounds.width = bounds.width + dx;
+                    newBounds.height = bounds.height - dy;
+                    newBounds.y = bounds.y + dy;
+                    break;
+                case 'sw':
+                    newBounds.width = bounds.width - dx;
+                    newBounds.height = bounds.height + dy;
+                    newBounds.x = bounds.x + dx;
+                    break;
+                case 'se':
+                    newBounds.width = bounds.width + dx;
+                    newBounds.height = bounds.height + dy;
+                    break;
             }
-            if (newProps.width > 10 && newProps.height > 10) {
+
+            if (newBounds.width > 10 && newBounds.height > 10) {
+                // Calculate scale factors
+                const scaleX = newBounds.width / bounds.width;
+                const scaleY = newBounds.height / bounds.height;
+
+                // Apply to all selected shapes
+                selection.forEach(id => {
+                    const initial = initialShapes[id];
+                    if (initial) {
+                        // Calculate relative position within original bounds
+                        const relX = (initial.x - bounds.x) / bounds.width;
+                        const relY = (initial.y - bounds.y) / bounds.height;
+                        const relW = initial.width / bounds.width;
+                        const relH = initial.height / bounds.height;
+
+                        // Apply to new bounds
+                        updateShape(id, {
+                            x: newBounds.x + relX * newBounds.width,
+                            y: newBounds.y + relY * newBounds.height,
+                            width: relW * newBounds.width,
+                            height: relH * newBounds.height
+                        });
+                    }
+                });
             }
-            if (newProps.width > 10 && newProps.height > 10) {
-                updateShape(selectedShape.id, newProps);
-                setDragStart(coords);
-            }
-        } else if (isRotating) {
-            const centerX = selectedShape.x + (selectedShape.width || 0) / 2;
-            const centerY = selectedShape.y + (selectedShape.height || 0) / 2;
+        } else if (isRotating && dragInfo && dragInfo.initialBounds) {
+            const bounds = dragInfo.initialBounds;
+            const initialShapes = dragInfo.initialShapes;
+            const centerX = bounds.centerX;
+            const centerY = bounds.centerY;
+
             const angle = Math.atan2(coords.y - centerY, coords.x - centerX) * (180 / Math.PI);
             let finalAngle = Math.round(angle);
             if (e.shiftKey) {
                 finalAngle = Math.round(finalAngle / 45) * 45;
             }
-            updateShape(selectedShape.id, { rotation: finalAngle + 90 });
+
+            // Calculate rotation delta
+            const startAngle = Math.atan2(dragStart.y - centerY, dragStart.x - centerX) * (180 / Math.PI);
+            const rotationDelta = finalAngle - startAngle;
+
+            // Apply rotation to all selected shapes
+            selection.forEach(id => {
+                const initial = initialShapes[id];
+                if (initial) {
+                    // Rotate shape's center around group center
+                    const shapeCenterX = initial.x + initial.width / 2;
+                    const shapeCenterY = initial.y + initial.height / 2;
+
+                    const angleRad = (rotationDelta * Math.PI) / 180;
+                    const cos = Math.cos(angleRad);
+                    const sin = Math.sin(angleRad);
+
+                    const dx = shapeCenterX - centerX;
+                    const dy = shapeCenterY - centerY;
+
+                    const newCenterX = centerX + (dx * cos - dy * sin);
+                    const newCenterY = centerY + (dx * sin + dy * cos);
+
+                    updateShape(id, {
+                        x: newCenterX - initial.width / 2,
+                        y: newCenterY - initial.height / 2,
+                        rotation: (initial.rotation || 0) + rotationDelta
+                    });
+                }
+            });
         }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e) => {
         if (tool === 'pen' && isDragging && !isEditingPath) {
             setIsDragging(false);
             return;
         }
+
+        // Handle selection rectangle
+        if (isSelecting && selectionRect) {
+            const selectedIds = [];
+            shapes.forEach(shape => {
+                // Check if shape intersects with selection rectangle
+                const shapeRight = shape.x + (shape.width || 0);
+                const shapeBottom = shape.y + (shape.height || 0);
+                const rectRight = selectionRect.x + selectionRect.width;
+                const rectBottom = selectionRect.y + selectionRect.height;
+
+                // Intersection test
+                if (!(shape.x > rectRight ||
+                    shapeRight < selectionRect.x ||
+                    shape.y > rectBottom ||
+                    shapeBottom < selectionRect.y)) {
+                    selectedIds.push(shape.id);
+                }
+            });
+
+            if (e && e.shiftKey) {
+                // Add to existing selection
+                const newSelection = [...new Set([...selection, ...selectedIds])];
+                setSelection(newSelection);
+            } else {
+                setSelection(selectedIds);
+            }
+
+            setSelectionRect(null);
+            setIsSelecting(false);
+        }
+
         if (isDragging || isResizing || isRotating || draggedPointIndex !== null || isDraggingArtboard) {
             if (onUpdateEnd) onUpdateEnd();
         }
@@ -524,7 +722,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     };
 
     React.useEffect(() => {
-        if (isDragging || isResizing || isRotating) {
+        if (isDragging || isResizing || isRotating || isSelecting) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
             return () => {
@@ -532,7 +730,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 window.removeEventListener('mouseup', handleMouseUp);
             };
         }
-    }, [isDragging, isResizing, isRotating, dragStart, selection, tool, canvasSize]);
+    }, [isDragging, isResizing, isRotating, isSelecting, dragStart, selection, tool, canvasSize]);
 
     const selectedShape = selection.length > 0 ? shapes.find(s => s.id === selection[0]) : null;
     const tree = buildTree(shapes);
@@ -547,16 +745,140 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         return null;
     };
 
-    const renderBoundingBox = (shape) => {
-        if (!shape) return null;
+    // Calculate unified bounding box for multiple selections
+    const calculateMultiSelectionBounds = () => {
+        if (selection.length === 0) return null;
+        if (selection.length === 1) {
+            const shape = shapes.find(s => s.id === selection[0]);
+            if (!shape) return null;
+            return {
+                x: shape.x,
+                y: shape.y,
+                width: shape.width || 0,
+                height: shape.height || 0,
+                centerX: shape.x + (shape.width || 0) / 2,
+                centerY: shape.y + (shape.height || 0) / 2,
+                rotation: shape.rotation || 0,
+                isSingleSelection: true
+            };
+        }
 
+        // Multiple selections - calculate axis-aligned bounds that encompass all rotated shapes
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        selection.forEach(id => {
+            const shape = shapes.find(s => s.id === id);
+            if (shape) {
+                const rotation = (shape.rotation || 0) * Math.PI / 180;
+                const w = shape.width || 0;
+                const h = shape.height || 0;
+                const cx = shape.x + w / 2;
+                const cy = shape.y + h / 2;
+
+                // Calculate corners of rotated rectangle
+                const corners = [
+                    { x: -w / 2, y: -h / 2 },
+                    { x: w / 2, y: -h / 2 },
+                    { x: w / 2, y: h / 2 },
+                    { x: -w / 2, y: h / 2 }
+                ];
+
+                corners.forEach(corner => {
+                    const rotatedX = cx + (corner.x * Math.cos(rotation) - corner.y * Math.sin(rotation));
+                    const rotatedY = cy + (corner.x * Math.sin(rotation) + corner.y * Math.cos(rotation));
+                    minX = Math.min(minX, rotatedX);
+                    minY = Math.min(minY, rotatedY);
+                    maxX = Math.max(maxX, rotatedX);
+                    maxY = Math.max(maxY, rotatedY);
+                });
+            }
+        });
+
+        const width = maxX - minX;
+        const height = maxY - minY;
+
+        return {
+            x: minX,
+            y: minY,
+            width,
+            height,
+            centerX: minX + width / 2,
+            centerY: minY + height / 2,
+            rotation: 0,
+            isSingleSelection: false
+        };
+    };
+
+    const renderBoundingBox = (bounds) => {
+        if (!bounds) return null;
+
+        // For single selection with rotation, render rotated bounding box
+        if (bounds.isSingleSelection && bounds.rotation) {
+            const transform = `rotate(${bounds.rotation} ${bounds.centerX} ${bounds.centerY})`;
+            return (
+                <g className="bounding-box" transform={transform}>
+                    <rect
+                        x={bounds.x - 2}
+                        y={bounds.y - 2}
+                        width={bounds.width + 4}
+                        height={bounds.height + 4}
+                        fill="none"
+                        stroke="#6366f1"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 2"
+                        pointerEvents="none"
+                    />
+                    {/* Handles */}
+                    {['nw', 'ne', 'sw', 'se'].map(handle => {
+                        let hx, hy;
+                        const w = bounds.width;
+                        const h = bounds.height;
+                        switch (handle) {
+                            case 'nw': hx = bounds.x; hy = bounds.y; break;
+                            case 'ne': hx = bounds.x + w; hy = bounds.y; break;
+                            case 'sw': hx = bounds.x; hy = bounds.y + h; break;
+                            case 'se': hx = bounds.x + w; hy = bounds.y + h; break;
+                        }
+                        return (
+                            <rect
+                                key={handle}
+                                className="transform-handle"
+                                x={hx - 4}
+                                y={hy - 4}
+                                width="8"
+                                height="8"
+                                fill="#6366f1"
+                                stroke="#ffffff"
+                                strokeWidth="1.5"
+                                style={{ cursor: `${handle}-resize`, pointerEvents: 'auto' }}
+                                onMouseDown={(e) => handleResizeMouseDown(e, handle)}
+                            />
+                        );
+                    })}
+                    {/* Rotation Handle */}
+                    <line x1={bounds.x + bounds.width / 2} y1={bounds.y} x2={bounds.x + bounds.width / 2} y2={bounds.y - 25} stroke="#6366f1" strokeWidth="1.5" />
+                    <circle
+                        cx={bounds.x + bounds.width / 2}
+                        cy={bounds.y - 25}
+                        r="5"
+                        fill="#10b981"
+                        stroke="#ffffff"
+                        strokeWidth="1.5"
+                        style={{ cursor: 'grab', pointerEvents: 'auto' }}
+                        onMouseDown={handleRotateMouseDown}
+                    />
+                </g>
+            );
+        }
+
+        // For multiple selections or non-rotated, render axis-aligned box
         return (
             <g className="bounding-box" pointerEvents="none">
                 <rect
-                    x={-2}
-                    y={-2}
-                    width={(shape.width || 0) + 4}
-                    height={(shape.height || 0) + 4}
+                    x={bounds.x - 2}
+                    y={bounds.y - 2}
+                    width={bounds.width + 4}
+                    height={bounds.height + 4}
                     fill="none"
                     stroke="#6366f1"
                     strokeWidth="1.5"
@@ -565,13 +887,13 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 {/* Handles */}
                 {['nw', 'ne', 'sw', 'se'].map(handle => {
                     let hx, hy;
-                    const w = shape.width || 0;
-                    const h = shape.height || 0;
+                    const w = bounds.width;
+                    const h = bounds.height;
                     switch (handle) {
-                        case 'nw': hx = 0; hy = 0; break;
-                        case 'ne': hx = w; hy = 0; break;
-                        case 'sw': hx = 0; hy = h; break;
-                        case 'se': hx = w; hy = h; break;
+                        case 'nw': hx = bounds.x; hy = bounds.y; break;
+                        case 'ne': hx = bounds.x + w; hy = bounds.y; break;
+                        case 'sw': hx = bounds.x; hy = bounds.y + h; break;
+                        case 'se': hx = bounds.x + w; hy = bounds.y + h; break;
                     }
                     return (
                         <rect
@@ -588,12 +910,11 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                             onMouseDown={(e) => handleResizeMouseDown(e, handle)}
                         />
                     );
-                })}
-                {/* Rotation Handle */}
-                <line x1={(shape.width || 0) / 2} y1={0} x2={(shape.width || 0) / 2} y2={-25} stroke="#6366f1" strokeWidth="1.5" />
+                })}\n                {/* Rotation Handle */}
+                <line x1={bounds.x + bounds.width / 2} y1={bounds.y} x2={bounds.x + bounds.width / 2} y2={bounds.y - 25} stroke="#6366f1" strokeWidth="1.5" />
                 <circle
-                    cx={(shape.width || 0) / 2}
-                    cy={-25}
+                    cx={bounds.x + bounds.width / 2}
+                    cy={bounds.y - 25}
                     r="5"
                     fill="#10b981"
                     stroke="#ffffff"
@@ -617,8 +938,6 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 <g key={shape.id} transform={transform}>
                     {/* Children still need to render */}
                     {shape.children && shape.children.map(child => renderShapeRecursiveWithSelection(child))}
-                    {/* Selection / Bounding Box */}
-                    {isSelected && !isEditingPath && renderBoundingBox(shape)}
                 </g>
             );
         }
@@ -693,9 +1012,6 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 {/* Children */}
                 {shape.children && shape.children.map(child => renderShapeRecursiveWithSelection(child))}
 
-                {/* Selection / Bounding Box */}
-                {isSelected && !isEditingPath && renderBoundingBox(shape)}
-
                 {/* Path Editing Points with Bezier Handles */}
                 {isSelected && isEditingPath && (shape.type === 'path' || (isEditingPath && selection.includes(shape.id))) && (
                     <g>
@@ -742,6 +1058,8 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                                                 setDragInfo({
                                                     startX: coords.x,
                                                     startY: coords.y,
+                                                    shapeX: selectedShape.x,
+                                                    shapeY: selectedShape.y,
                                                     initialPoints: JSON.parse(JSON.stringify(shape.pathPoints || editingPathPoints || []))
                                                 });
                                             }}
@@ -765,6 +1083,8 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                                                 setDragInfo({
                                                     startX: coords.x,
                                                     startY: coords.y,
+                                                    shapeX: selectedShape.x,
+                                                    shapeY: selectedShape.y,
                                                     initialPoints: JSON.parse(JSON.stringify(shape.pathPoints || editingPathPoints || []))
                                                 });
                                             }}
@@ -790,6 +1110,8 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                                         setDragInfo({
                                             startX: coords.x,
                                             startY: coords.y,
+                                            shapeX: selectedShape.x,
+                                            shapeY: selectedShape.y,
                                             initialPoints: JSON.parse(JSON.stringify(shape.pathPoints || editingPathPoints || []))
                                         });
                                     }}
@@ -846,6 +1168,9 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                     </defs>
                     {tree.map(root => renderShapeRecursiveWithSelection(root))}
 
+                    {/* Unified Bounding Box for Selection */}
+                    {selection.length > 0 && !isEditingPath && renderBoundingBox(calculateMultiSelectionBounds())}
+
                     {/* Drawing Preview */}
                     {isDrawing && pathPoints.length > 0 && (
                         <g>
@@ -876,11 +1201,26 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                             y1={guide.type === 'vertical' ? guide.y1 : guide.y}
                             x2={guide.type === 'vertical' ? guide.x : guide.x2}
                             y2={guide.type === 'vertical' ? guide.y2 : guide.y}
-                            stroke="#ef4444"
+                            stroke="#ec4899"
                             strokeWidth="1"
                             strokeDasharray="4 2"
                         />
                     ))}
+
+                    {/* Selection Rectangle */}
+                    {selectionRect && (
+                        <rect
+                            x={selectionRect.x}
+                            y={selectionRect.y}
+                            width={selectionRect.width}
+                            height={selectionRect.height}
+                            fill="rgba(99, 102, 241, 0.1)"
+                            stroke="#6366f1"
+                            strokeWidth="1.5"
+                            strokeDasharray="4 2"
+                            pointerEvents="none"
+                        />
+                    )}
                 </svg>
 
                 {/* Artboard Controls */}
@@ -917,6 +1257,20 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                     </>
                 )}
 
+                {/* Clip Path Definitions for Glass Effect on Custom Paths */}
+                <svg width="0" height="0" style={{ position: 'absolute' }}>
+                    <defs>
+                        {shapes.filter(s => s.glassEffect && s.type === 'path' && s.pathData).map(shape => (
+                            <clipPath key={`clip-${shape.id}`} id={`glass-clip-${shape.id}`} clipPathUnits="objectBoundingBox">
+                                <path
+                                    d={shape.pathData}
+                                    transform={`scale(${1 / (shape.width || 1)} ${1 / (shape.height || 1)})`}
+                                />
+                            </clipPath>
+                        ))}
+                    </defs>
+                </svg>
+
                 {/* Glass Effect Overlay - CSS backdrop-filter for true glassmorphism */}
                 {shapes.filter(s => s.glassEffect).map(shape => {
                     const glassBlur = shape.glassBlur || 10;
@@ -926,6 +1280,8 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
 
                     // Calculate corner radius for different shape types
                     let borderRadius = '0px';
+                    let clipPath = null;
+
                     if (shape.type === 'rect') {
                         if (shape.cornerRadius) {
                             borderRadius = `${shape.cornerRadius}px`;
@@ -934,6 +1290,9 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                         }
                     } else if (shape.type === 'ellipse') {
                         borderRadius = '50%';
+                    } else if (shape.type === 'path' && shape.pathData) {
+                        // Use SVG clip-path for custom paths
+                        clipPath = `url(#glass-clip-${shape.id})`;
                     }
 
                     return (
@@ -952,6 +1311,8 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                                 backgroundColor: shape.fill ? `${shape.fill}${Math.round(glassOpacity * 255).toString(16).padStart(2, '0')}` : `rgba(255, 255, 255, ${glassOpacity})`,
                                 border: shape.stroke ? `${shape.strokeWidth || 1}px solid ${shape.stroke}` : `1px solid rgba(255, 255, 255, 0.3)`,
                                 borderRadius: borderRadius,
+                                clipPath: clipPath,
+                                WebkitClipPath: clipPath,
                                 boxShadow: isSelected ? '0 0 0 2px #6366f1' : 'none',
                                 cursor: 'move',
                                 transition: 'box-shadow 0.2s ease',

@@ -446,3 +446,18 @@ body {
 .animate-fade-in {
     animation: fadeIn 0.3s ease-out;
 }
+/* Timeline Overlay */
+.timeline {
+    position: fixed !important;
+    bottom: 0;
+    left: var(--toolbar-width);
+    right: 0;
+    height: var(--timeline-height);
+    z-index: 100;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
