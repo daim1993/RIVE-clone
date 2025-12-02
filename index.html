@@ -4,19 +4,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rive Clone - Animation Editor</title>
-
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>RIVE Clone</title>
 
     <!-- React & ReactDOM -->
-    <script src="js/lib/react.development.js"></script>
-    <script src="js/lib/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
 
     <!-- Babel for JSX -->
-    <script src="js/lib/babel.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 
     <!-- Styles -->
     <link rel="stylesheet" href="style.css?v=3">
@@ -27,6 +25,8 @@
 
     <!-- Application Logic -->
     <script type="text/babel" src="js/icons.js?v=3"></script>
+    <script type="text/babel" src="js/components/InterpolationPanel.js?v=3"></script>
+    <script type="text/babel" src="js/components/StateMachineEditor.js?v=3"></script>
     <script type="text/babel" src="js/components/MenuBar.js?v=3"></script>
     <script type="text/babel" src="js/components/Toolbar.js?v=3"></script>
     <script type="text/babel" src="js/components/Hierarchy.js?v=3"></script>
