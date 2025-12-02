@@ -177,6 +177,20 @@ const App = () => {
                 let newTime = (now - start) % duration;
                 setCurrentTime(newTime);
 
+                // State Machine Logic
+                // Check for transitions from current state
+                const possibleTransitions = transitions.filter(t => t.from === activeAnimationId);
+                for (const trans of possibleTransitions) {
+                    const input = stateMachineInputs.find(i => i.name === trans.condition);
+                    if (input) {
+                        if (input.type === 'boolean' && input.value === true) {
+                            setActiveAnimationId(trans.to);
+                            setCurrentTime(0); // Reset time for new animation
+                            return;
+                        }
+                    }
+                }
+
                 // Interpolate shapes based on keyframes
                 shapes.forEach(shape => {
                     const shapeKeyframes = keyframes
@@ -215,7 +229,7 @@ const App = () => {
             animationFrame = requestAnimationFrame(loop);
         }
         return () => cancelAnimationFrame(animationFrame);
-    }, [isPlaying, mode, currentTime]);
+    }, [isPlaying, mode, currentTime, duration, activeAnimationId, transitions, stateMachineInputs]);
 
     const addShape = (shape) => {
         const newShape = { ...shape, id: Date.now() };
@@ -664,6 +678,11 @@ const App = () => {
                         addAnimation={addAnimation}
                         isVisible={isTimelineVisible}
                         onToggle={() => setIsTimelineVisible(!isTimelineVisible)}
+                        stateMachineInputs={stateMachineInputs}
+                        setStateMachineInputs={setStateMachineInputs}
+                        transitions={transitions}
+                        setTransitions={setTransitions}
+                        onNodeMouseDown={handleNodeMouseDown}
                     />
                 )
             }

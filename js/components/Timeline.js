@@ -1,11 +1,17 @@
 const Icons = window.Icons;
+const StateMachine = window.StateMachine;
+
 const Timeline = ({
     isPlaying, setIsPlaying, currentTime, setCurrentTime,
     duration, setDuration, shapes, selection,
     keyframes, addKeyframe, deleteKeyframe,
-    animations, activeAnimationId, setActiveAnimationId, addAnimation
+    animations, activeAnimationId, setActiveAnimationId, addAnimation,
+    stateMachineInputs, setStateMachineInputs,
+    transitions, setTransitions,
+    onNodeMouseDown
 }) => {
     const [isDraggingPlayhead, setIsDraggingPlayhead] = React.useState(false);
+    const [activeView, setActiveView] = React.useState('timeline'); // 'timeline' or 'graph'
     const timelineRef = React.useRef(null);
 
     const handlePlayheadMouseDown = (e) => {
@@ -69,6 +75,36 @@ const Timeline = ({
         <div className="timeline">
             <div className="timeline-header">
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {/* View Switcher */}
+                    <div className="view-switcher" style={{ display: 'flex', background: 'var(--bg-app)', borderRadius: '4px', padding: '2px', marginRight: '8px' }}>
+                        <div
+                            onClick={() => setActiveView('timeline')}
+                            style={{
+                                padding: '4px 8px',
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                borderRadius: '3px',
+                                background: activeView === 'timeline' ? 'var(--bg-panel-hover)' : 'transparent',
+                                color: activeView === 'timeline' ? 'var(--text-primary)' : 'var(--text-secondary)'
+                            }}
+                        >
+                            Timeline
+                        </div>
+                        <div
+                            onClick={() => setActiveView('graph')}
+                            style={{
+                                padding: '4px 8px',
+                                fontSize: '11px',
+                                cursor: 'pointer',
+                                borderRadius: '3px',
+                                background: activeView === 'graph' ? 'var(--bg-panel-hover)' : 'transparent',
+                                color: activeView === 'graph' ? 'var(--text-primary)' : 'var(--text-secondary)'
+                            }}
+                        >
+                            Graph
+                        </div>
+                    </div>
+
                     <div style={{ display: 'flex', alignItems: 'center', borderRight: '1px solid var(--border-color)', paddingRight: '8px', marginRight: '8px' }}>
                         <select
                             value={activeAnimationId}
@@ -100,112 +136,134 @@ const Timeline = ({
                     <button className="btn" onClick={() => setIsPlaying(!isPlaying)}>
                         {isPlaying ? <Icons.Pause /> : <Icons.Play />}
                     </button>
-                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                        {(currentTime / 1000).toFixed(2)}s / {(duration / 1000).toFixed(1)}s
-                    </span>
-                    <input
-                        type="number"
-                        value={duration / 1000}
-                        onChange={(e) => setDuration(Math.max(1, Number(e.target.value)) * 1000)}
-                        style={{
-                            background: 'var(--bg-app)',
-                            border: '1px solid var(--border-color)',
-                            color: 'var(--text-primary)',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            width: '50px'
-                        }}
-                    />
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>sec</span>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    {hasSelection && (
-                        <button
-                            className="btn"
-                            onClick={handleAddKeyframe}
-                            title="Add Keyframe (K)"
-                        >
-                            <Icons.Plus /> Keyframe
-                        </button>
+
+                    {activeView === 'timeline' && (
+                        <>
+                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                                {(currentTime / 1000).toFixed(2)}s / {(duration / 1000).toFixed(1)}s
+                            </span>
+                            <input
+                                type="number"
+                                value={duration / 1000}
+                                onChange={(e) => setDuration(Math.max(1, Number(e.target.value)) * 1000)}
+                                style={{
+                                    background: 'var(--bg-app)',
+                                    border: '1px solid var(--border-color)',
+                                    color: 'var(--text-primary)',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    width: '50px'
+                                }}
+                            />
+                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>sec</span>
+                        </>
                     )}
                 </div>
-            </div>
-            <div className="timeline-tracks" ref={timelineRef} onClick={handleTrackClick}>
-                {/* Frame guides - every 5 frames at 30fps */}
-                <div style={{ position: 'absolute', top: 0, left: '200px', right: 0, height: '100%', pointerEvents: 'none' }}>
-                    {Array.from({ length: Math.floor((duration / 1000) * 30 / 5) + 1 }).map((_, i) => {
-                        const frameTime = (i * 5 / 30) * 1000; // 5 frames at 30fps
-                        const percent = (frameTime / duration) * 100;
-                        return (
-                            <div
-                                key={i}
-                                style={{
-                                    position: 'absolute',
-                                    left: `${percent}%`,
-                                    top: 0,
-                                    bottom: 0,
-                                    width: '1px',
-                                    background: i % 6 === 0 ? 'rgba(161, 161, 170, 0.3)' : 'rgba(161, 161, 170, 0.1)',
-                                    pointerEvents: 'none'
-                                }}
+
+                {activeView === 'timeline' && (
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {hasSelection && (
+                            <button
+                                className="btn"
+                                onClick={handleAddKeyframe}
+                                title="Add Keyframe (K)"
                             >
-                                {i % 6 === 0 && (
-                                    <span style={{
+                                <Icons.Plus /> Keyframe
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {activeView === 'timeline' ? (
+                <div className="timeline-tracks" ref={timelineRef} onClick={handleTrackClick}>
+                    {/* Frame guides - every 5 frames at 30fps */}
+                    <div style={{ position: 'absolute', top: 0, left: '200px', right: 0, height: '100%', pointerEvents: 'none' }}>
+                        {Array.from({ length: Math.floor((duration / 1000) * 30 / 5) + 1 }).map((_, i) => {
+                            const frameTime = (i * 5 / 30) * 1000; // 5 frames at 30fps
+                            const percent = (frameTime / duration) * 100;
+                            return (
+                                <div
+                                    key={i}
+                                    style={{
                                         position: 'absolute',
-                                        top: '-18px',
-                                        left: '2px',
-                                        fontSize: '9px',
-                                        color: 'var(--text-secondary)',
-                                        whiteSpace: 'nowrap'
-                                    }}>
-                                        {i * 5}
-                                    </span>
-                                )}
+                                        left: `${percent}%`,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: '1px',
+                                        background: i % 6 === 0 ? 'rgba(161, 161, 170, 0.3)' : 'rgba(161, 161, 170, 0.1)',
+                                        pointerEvents: 'none'
+                                    }}
+                                >
+                                    {i % 6 === 0 && (
+                                        <span style={{
+                                            position: 'absolute',
+                                            top: '-18px',
+                                            left: '2px',
+                                            fontSize: '9px',
+                                            color: 'var(--text-secondary)',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            {i * 5}
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                    {shapes.map(shape => {
+                        const shapeKeyframes = keyframes.filter(kf => kf.shapeId === shape.id);
+                        const isSelected = selection.includes(shape.id);
+                        return (
+                            <div key={shape.id} className="track" style={{ backgroundColor: isSelected ? 'var(--bg-panel-hover)' : 'transparent' }}>
+                                <div className="track-label">{shape.name}</div>
+                                <div className="track-content">
+                                    {shapeKeyframes.map((kf, idx) => (
+                                        <div
+                                            key={idx}
+                                            className={`keyframe ${Math.abs(kf.time - currentTime) < 50 ? 'active' : ''}`}
+                                            style={{ left: `${(kf.time / duration) * 100}%` }}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setCurrentTime(kf.time);
+                                            }}
+                                            onDoubleClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteKeyframe(kf);
+                                            }}
+                                            title={`${(kf.time / 1000).toFixed(2)}s - Double click to delete`}
+                                        ></div>
+                                    ))}
+                                </div>
                             </div>
                         );
                     })}
-                </div>
-                {shapes.map(shape => {
-                    const shapeKeyframes = keyframes.filter(kf => kf.shapeId === shape.id);
-                    const isSelected = selection.includes(shape.id);
-                    return (
-                        <div key={shape.id} className="track" style={{ backgroundColor: isSelected ? 'var(--bg-panel-hover)' : 'transparent' }}>
-                            <div className="track-label">{shape.name}</div>
-                            <div className="track-content">
-                                {shapeKeyframes.map((kf, idx) => (
-                                    <div
-                                        key={idx}
-                                        className={`keyframe ${Math.abs(kf.time - currentTime) < 50 ? 'active' : ''}`}
-                                        style={{ left: `${(kf.time / duration) * 100}%` }}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setCurrentTime(kf.time);
-                                        }}
-                                        onDoubleClick={(e) => {
-                                            e.stopPropagation();
-                                            deleteKeyframe(kf);
-                                        }}
-                                        title={`${(kf.time / 1000).toFixed(2)}s - Double click to delete`}
-                                    ></div>
-                                ))}
-                            </div>
-                        </div>
-                    );
-                })}
 
-                {/* Playhead */}
-                <div
-                    className="playhead"
-                    style={{ left: `calc(200px + (100% - 200px) * ${currentTime / duration})` }}
-                >
+                    {/* Playhead */}
                     <div
-                        className="playhead-handle"
-                        onMouseDown={handlePlayheadMouseDown}
-                        style={{ cursor: 'ew-resize' }}
-                    ></div>
+                        className="playhead"
+                        style={{ left: `calc(200px + (100% - 200px) * ${currentTime / duration})` }}
+                    >
+                        <div
+                            className="playhead-handle"
+                            onMouseDown={handlePlayheadMouseDown}
+                            style={{ cursor: 'ew-resize' }}
+                        ></div>
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <StateMachine
+                    animations={animations}
+                    transitions={transitions}
+                    activeAnimationId={activeAnimationId}
+                    setActiveAnimationId={setActiveAnimationId}
+                    onNodeMouseDown={onNodeMouseDown}
+                    inputs={stateMachineInputs}
+                    setInputs={setStateMachineInputs}
+                    setTransitions={setTransitions}
+                />
+            )}
         </div>
     );
 };
