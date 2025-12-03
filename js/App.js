@@ -1,4 +1,4 @@
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 const App = () => {
     // Access components from window inside the component
@@ -10,6 +10,7 @@ const App = () => {
     const Timeline = window.Timeline;
     const MenuBar = window.MenuBar;
     const Toolbar = window.Toolbar;
+    const Layout = window.Layout;
 
     // Easing Functions
     const Easing = {
@@ -78,6 +79,64 @@ const App = () => {
     const [currentStateId, setCurrentStateId] = useState('entry');
     const [selectedTransitionId, setSelectedTransitionId] = useState(null);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
+
+    // Layout State - Separate states for design and animate modes
+    const defaultDesignLayout = {
+        id: 'root',
+        type: 'container',
+        direction: 'row',
+        size: 100,
+        children: [
+            { id: 'hierarchy', type: 'component', component: 'Hierarchy', title: 'Hierarchy', size: 20 },
+            { id: 'canvas', type: 'component', component: 'Canvas', title: 'Canvas', size: 60 },
+            { id: 'properties', type: 'component', component: 'Properties', title: 'Properties', size: 20 }
+        ]
+    };
+
+    const defaultAnimateLayout = {
+        id: 'root',
+        type: 'container',
+        direction: 'col',
+        size: 100,
+        children: [
+            {
+                id: 'main-row',
+                type: 'container',
+                direction: 'row',
+                size: 70,
+                children: [
+                    { id: 'hierarchy', type: 'component', component: 'Hierarchy', title: 'Hierarchy', size: 20 },
+                    { id: 'canvas', type: 'component', component: 'Canvas', title: 'Canvas', size: 60 },
+                    { id: 'properties', type: 'component', component: 'Properties', title: 'Properties', size: 20 }
+                ]
+            },
+            { id: 'timeline', type: 'component', component: 'Timeline', title: 'Timeline', size: 30 }
+        ]
+    };
+
+    const [designLayout, setDesignLayout] = useState(defaultDesignLayout);
+    const [animateLayout, setAnimateLayout] = useState(defaultAnimateLayout);
+    const [layout, setLayout] = useState(defaultDesignLayout);
+
+    useEffect(() => {
+        if (mode === 'animate') {
+            setLayout(animateLayout);
+            setIsTimelineVisible(true);
+        } else {
+            setLayout(designLayout);
+            setIsTimelineVisible(false);
+        }
+    }, [mode, designLayout, animateLayout]);
+
+    const handleLayoutChange = (newLayout) => {
+        if (mode === 'animate') {
+            setAnimateLayout(newLayout);
+        } else {
+            setDesignLayout(newLayout);
+        }
+        setLayout(newLayout);
+    };
+
 
     // History Management
     const recordHistory = (newShapes, newAnimations) => {
@@ -311,11 +370,13 @@ const App = () => {
     };
 
     const updateShapes = (updates) => {
-        const newShapes = shapes.map(s => {
-            const update = updates.find(u => u.id === s.id);
-            return update ? { ...s, ...update.props } : s;
+        setShapes(prevShapes => {
+            const newShapes = prevShapes.map(s => {
+                const update = updates.find(u => u.id === s.id);
+                return update ? { ...s, ...update.props } : s;
+            });
+            return newShapes;
         });
-        setShapes(newShapes);
     };
 
     const handleMoveShape = (draggedId, targetId, position) => {
@@ -548,89 +609,55 @@ const App = () => {
         setSmTransitions(smTransitions.map(t => t.id === id ? { ...t, ...updates } : t));
     };
 
-    return (
-        <div className="app-container">
-            <div className="header">
-                <div className="logo">
-                    <Icons.Box />
-                    <span>RIVE Clone</span>
-                </div>
-
-                {/* Toolbar (Design Mode) - Design tools */}
-                {mode === 'design' && (
-                    <Toolbar
-                        activeTool={tool}
-                        setTool={setTool}
-                        onImportImage={handleImportImage}
-                        onImportSVG={handleImportSVG}
-                    />
-                )}
-
-                <div className="mode-switcher">
-                    <div
-                        className={`mode-btn ${mode === 'design' ? 'active' : ''}`}
-                        onClick={() => {
-                            setMode('design');
-                            setIsTimelineVisible(false);
-                            setIsPlaying(false);
-                            setActiveView('canvas');
-                        }}
-                    >
-                        Design
-                    </div>
-                    <div
-                        className={`mode-btn ${mode === 'animate' ? 'active' : ''}`}
-                        onClick={() => {
-                            setMode('animate');
-                            setIsTimelineVisible(true);
-                        }}
-                    >
-                        Animate
-                    </div>
-                </div>
-
-                <div className="actions">
-                    <button className="btn" onClick={handleExport}>
-                        <Icons.Download size={14} />
-                        Export
-                    </button>
-                    <button className="btn primary">
-                        <Icons.Play size={14} />
-                        Preview
-                    </button>
-                </div>
-            </div>
-
-            <div className="menu-bar">
-                <MenuBar
-                    onNew={handleNew}
-                    onOpen={handleOpen}
-                    onExport={handleExport}
-                    onUndo={undo}
-                    onRedo={redo}
-                    canvasSize={canvasSize}
-                    setCanvasSize={setCanvasSize}
-                />
-                <input type="file" ref={fileInputRef} onChange={handleFileImport} style={{ display: 'none' }} accept=".json" />
-            </div>
-
-
-
-
-            {/* Left Sidebar - Hierarchy */}
-            <div className="sidebar-left">
-                <Hierarchy
-                    shapes={shapes}
-                    selection={selection}
-                    setSelection={setSelection}
-                    onMoveShape={handleMoveShape}
-                    onReparent={handleReparent}
-                    onAddGroup={handleAddGroup}
-                />
-            </div>
-
-            {/* Center Area */}
-            <div className="canvas-area" style={{ display: 'flex', flexDirection: 'column' }}>
+    // Component Map for Layout
+    const componentMap = useMemo(() => ({
+        Hierarchy: () => (
+            <Hierarchy
+                shapes={shapes}
+                selection={selection}
+                setSelection={setSelection}
+                onMoveShape={handleMoveShape}
+                onReparent={handleReparent}
+                onAddGroup={handleAddGroup}
+            />
+        ),
+        Properties: () => (
+            <Properties
+                selection={selection}
+                shapes={shapes}
+                updateShapes={updateShapes}
+                canvasSize={canvasSize}
+                updateShape={updateShape}
+            />
+        ),
+        Timeline: () => (
+            <Timeline
+                isVisible={isTimelineVisible}
+                onToggle={() => setIsTimelineVisible(!isTimelineVisible)}
+                isPlaying={isPlaying}
+                setIsPlaying={setIsPlaying}
+                currentTime={currentTime}
+                setCurrentTime={setCurrentTime}
+                duration={duration}
+                setDuration={setDuration}
+                shapes={shapes}
+                selection={selection}
+                keyframes={keyframes}
+                addKeyframe={addKeyframe}
+                deleteKeyframe={deleteKeyframe}
+                animations={animations}
+                activeAnimationId={activeAnimationId}
+                setActiveAnimationId={setActiveAnimationId}
+                addAnimation={addAnimation}
+                // State Machine Props
+                smInputs={smInputs}
+                setSmInputs={setSmInputs}
+                selectedTransition={smTransitions.find(t => t.id === selectedTransitionId)}
+                onUpdateTransition={handleUpdateTransition}
+            />
+        ),
+        Canvas: () => (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                 {/* View Switcher (Only in Animate Mode) */}
                 {mode === 'animate' && (
                     <div style={{
@@ -697,45 +724,76 @@ const App = () => {
                     )}
                 </div>
             </div>
+        )
+    }), [shapes, selection, tool, mode, isPlaying, currentTime, animations, activeAnimationId, canvasSize, isTimelineVisible, activeView, smStates, smTransitions, smInputs, currentStateId, selectedTransitionId, selectedNodeId]);
 
-            {/* Right Sidebar - Properties */}
-            <div className="sidebar-right">
-                <Properties
-                    selection={selection}
-                    shapes={shapes}
-                    updateShapes={updateShapes}
-                    canvasSize={canvasSize}
-                    updateShape={updateShape}
-                />
+    return (
+        <div className="app-container">
+            <div className="header">
+                <div className="logo">
+                    <Icons.Box />
+                    <span>RIVE Clone</span>
+                </div>
+
+                {/* Toolbar (Design Mode) - Design tools */}
+                {mode === 'design' && (
+                    <Toolbar
+                        activeTool={tool}
+                        setTool={setTool}
+                        onImportImage={handleImportImage}
+                        onImportSVG={handleImportSVG}
+                    />
+                )}
+
+                <div className="mode-switcher">
+                    <div
+                        className={`mode-btn ${mode === 'design' ? 'active' : ''}`}
+                        onClick={() => {
+                            setMode('design');
+                            setIsTimelineVisible(false);
+                            setIsPlaying(false);
+                            setActiveView('canvas');
+                        }}
+                    >
+                        Design
+                    </div>
+                    <div
+                        className={`mode-btn ${mode === 'animate' ? 'active' : ''}`}
+                        onClick={() => {
+                            setMode('animate');
+                            setIsTimelineVisible(true);
+                        }}
+                    >
+                        Animate
+                    </div>
+                </div>
+
+                <div className="actions">
+                    <button className="btn" onClick={handleExport}>
+                        <Icons.Download size={14} />
+                        Export
+                    </button>
+                    <button className="btn primary">
+                        <Icons.Play size={14} />
+                        Preview
+                    </button>
+                </div>
             </div>
 
-            {/* Timeline Overlay */}
-            {mode === 'animate' && isTimelineVisible && (
-                <Timeline
-                    isVisible={isTimelineVisible}
-                    onToggle={() => setIsTimelineVisible(!isTimelineVisible)}
-                    isPlaying={isPlaying}
-                    setIsPlaying={setIsPlaying}
-                    currentTime={currentTime}
-                    setCurrentTime={setCurrentTime}
-                    duration={duration}
-                    setDuration={setDuration}
-                    shapes={shapes}
-                    selection={selection}
-                    keyframes={keyframes}
-                    addKeyframe={addKeyframe}
-                    deleteKeyframe={deleteKeyframe}
-                    animations={animations}
-                    activeAnimationId={activeAnimationId}
-                    setActiveAnimationId={setActiveAnimationId}
-                    addAnimation={addAnimation}
-                    // State Machine Props
-                    smInputs={smInputs}
-                    setSmInputs={setSmInputs}
-                    selectedTransition={smTransitions.find(t => t.id === selectedTransitionId)}
-                    onUpdateTransition={handleUpdateTransition}
+            <div className="menu-bar">
+                <MenuBar
+                    onNew={handleNew}
+                    onOpen={handleOpen}
+                    onExport={handleExport}
+                    onUndo={undo}
+                    onRedo={redo}
+                    canvasSize={canvasSize}
+                    setCanvasSize={setCanvasSize}
                 />
-            )}
+                <input type="file" ref={fileInputRef} onChange={handleFileImport} style={{ display: 'none' }} accept=".json" />
+            </div>
+
+            <Layout layout={layout} componentMap={componentMap} onLayoutChange={handleLayoutChange} />
         </div>
     );
 };
