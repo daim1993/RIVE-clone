@@ -1,25 +1,29 @@
 const { useState, useEffect, useRef } = React;
-const Icons = window.Icons;
-const StateMachineEditor = window.StateMachineEditor;
-const Hierarchy = window.Hierarchy;
-const Properties = window.Properties;
-const Canvas = window.Canvas;
-const Timeline = window.Timeline;
-
-// Easing Functions
-const Easing = {
-    linear: t => t,
-    easeIn: t => t * t,
-    easeOut: t => t * (2 - t),
-    easeInOut: t => t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
-    cubicBezier: (p1x, p1y, p2x, p2y) => t => t, // Placeholder
-    spring: (t) => {
-        const p = 0.3;
-        return Math.pow(2, -10 * t) * Math.sin((t - p / 4) * (2 * Math.PI) / p) + 1;
-    }
-};
 
 const App = () => {
+    // Access components from window inside the component
+    const Icons = window.Icons;
+    const StateMachineEditor = window.StateMachineEditor;
+    const Hierarchy = window.Hierarchy;
+    const Properties = window.Properties;
+    const Canvas = window.Canvas;
+    const Timeline = window.Timeline;
+    const MenuBar = window.MenuBar;
+    const Toolbar = window.Toolbar;
+
+    // Easing Functions
+    const Easing = {
+        linear: t => t,
+        easeIn: t => t * t,
+        easeOut: t => t * (2 - t),
+        easeInOut: t => t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+        cubicBezier: (p1x, p1y, p2x, p2y) => t => t, // Placeholder
+        spring: (t) => {
+            const p = 0.3;
+            return Math.pow(2, -10 * t) * Math.sin((t - p / 4) * (2 * Math.PI) / p) + 1;
+        }
+    };
+
     const [shapes, setShapes] = useState([
         { id: 1, type: 'rect', x: 100, y: 100, width: 100, height: 100, fill: '#6366f1', stroke: '#ffffff', strokeWidth: 2, opacity: 1, blendMode: 'normal', name: 'Rectangle 1' },
         { id: 2, type: 'ellipse', x: 300, y: 200, width: 100, height: 100, fill: '#ec4899', stroke: '#ffffff', strokeWidth: 2, opacity: 1, blendMode: 'normal', name: 'Circle 1' }
@@ -551,24 +555,20 @@ const App = () => {
                     <Icons.Box />
                     <span>RIVE Clone</span>
                 </div>
-                <div className="menu-bar">
-                    <button onClick={handleNew}>New</button>
-                    <button onClick={handleOpen}>Open</button>
-                    <button onClick={handleExport}>Export</button>
-                    <input type="file" ref={fileInputRef} onChange={handleFileImport} style={{ display: 'none' }} accept=".json" />
-                    <div style={{ width: '1px', height: '20px', background: 'var(--border-color)', margin: '0 8px' }}></div>
-                    <label className="btn" title="Import SVG">
-                        <Icons.Image /> SVG
-                        <input type="file" onChange={handleImportSVG} style={{ display: 'none' }} accept=".svg" />
-                    </label>
-                    <label className="btn" title="Import Image">
-                        <Icons.Image /> Image
-                        <input type="file" onChange={handleImportImage} style={{ display: 'none' }} accept="image/*" />
-                    </label>
-                </div>
-                <div className="mode-switch">
-                    <button
-                        className={mode === 'design' ? 'active' : ''}
+
+                {/* Toolbar (Design Mode) - Design tools */}
+                {mode === 'design' && (
+                    <Toolbar
+                        activeTool={tool}
+                        setTool={setTool}
+                        onImportImage={handleImportImage}
+                        onImportSVG={handleImportSVG}
+                    />
+                )}
+
+                <div className="mode-switcher">
+                    <div
+                        className={`mode-btn ${mode === 'design' ? 'active' : ''}`}
                         onClick={() => {
                             setMode('design');
                             setIsTimelineVisible(false);
@@ -577,8 +577,8 @@ const App = () => {
                         }}
                     >
                         Design
-                    </button>
-                    <button
+                    </div>
+                    <div
                         className={`mode-btn ${mode === 'animate' ? 'active' : ''}`}
                         onClick={() => {
                             setMode('animate');
@@ -586,112 +586,127 @@ const App = () => {
                         }}
                     >
                         Animate
+                    </div>
+                </div>
+
+                <div className="actions">
+                    <button className="btn" onClick={handleExport}>
+                        <Icons.Download size={14} />
+                        Export
+                    </button>
+                    <button className="btn primary">
+                        <Icons.Play size={14} />
+                        Preview
                     </button>
                 </div>
             </div>
 
-            <div className="main-content">
-                {/* Left Sidebar - Hierarchy */}
-                <div className="sidebar-left">
-                    <Hierarchy
-                        shapes={shapes}
-                        selection={selection}
-                        setSelection={setSelection}
-                        onMoveShape={handleMoveShape}
-                        onReparent={handleReparent}
-                        onAddGroup={handleAddGroup}
-                    />
-                </div>
+            <div className="menu-bar">
+                <MenuBar
+                    onNew={handleNew}
+                    onOpen={handleOpen}
+                    onExport={handleExport}
+                    onUndo={undo}
+                    onRedo={redo}
+                    canvasSize={canvasSize}
+                    setCanvasSize={setCanvasSize}
+                />
+                <input type="file" ref={fileInputRef} onChange={handleFileImport} style={{ display: 'none' }} accept=".json" />
+            </div>
 
-                {/* Center Area */}
-                <div className="canvas-area" style={{ display: 'flex', flexDirection: 'column' }}>
-                    {/* View Switcher (Only in Animate Mode) */}
-                    {mode === 'animate' && (
-                        <div style={{
-                            height: '32px',
-                            background: 'var(--bg-panel)',
-                            borderBottom: '1px solid var(--border-color)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '0 8px',
-                            gap: '8px'
-                        }}>
-                            <button
-                                className={`btn ${activeView === 'canvas' ? 'active' : ''}`}
-                                onClick={() => setActiveView('canvas')}
-                                style={{ fontSize: '11px', padding: '4px 8px', background: activeView === 'canvas' ? 'var(--bg-input)' : 'transparent' }}
-                            >
-                                Canvas
-                            </button>
-                            <button
-                                className={`btn ${activeView === 'graph' ? 'active' : ''}`}
-                                onClick={() => setActiveView('graph')}
-                                style={{ fontSize: '11px', padding: '4px 8px', background: activeView === 'graph' ? 'var(--bg-input)' : 'transparent' }}
-                            >
-                                State Machine
-                            </button>
-                        </div>
-                    )}
 
-                    <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-                        {/* Canvas View */}
-                        <div style={{
-                            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                            visibility: activeView === 'canvas' ? 'visible' : 'hidden'
-                        }}>
-                            <Canvas
-                                shapes={shapes}
-                                selection={selection}
-                                setSelection={setSelection}
-                                tool={tool}
-                                addShape={addShape}
-                                updateShape={updateShape}
-                                updateShapes={updateShapes}
-                                onUpdateEnd={() => recordHistory(shapes, animations)}
-                                canvasSize={canvasSize}
-                                setCanvasSize={setCanvasSize}
-                                mode={mode}
-                            />
-                        </div>
 
-                        {/* State Machine View */}
-                        {mode === 'animate' && activeView === 'graph' && (
-                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-                                <StateMachineEditor
-                                    states={smStates}
-                                    transitions={smTransitions}
-                                    onAddState={handleAddState}
-                                    onAddTransition={handleAddTransition}
-                                    onSelectNode={setSelectedNodeId}
-                                    selectedNodeId={selectedNodeId}
-                                    onSelectTransition={setSelectedTransitionId}
-                                    selectedTransitionId={selectedTransitionId}
-                                />
-                            </div>
-                        )}
+
+            {/* Left Sidebar - Hierarchy */}
+            <div className="sidebar-left">
+                <Hierarchy
+                    shapes={shapes}
+                    selection={selection}
+                    setSelection={setSelection}
+                    onMoveShape={handleMoveShape}
+                    onReparent={handleReparent}
+                    onAddGroup={handleAddGroup}
+                />
+            </div>
+
+            {/* Center Area */}
+            <div className="canvas-area" style={{ display: 'flex', flexDirection: 'column' }}>
+                {/* View Switcher (Only in Animate Mode) */}
+                {mode === 'animate' && (
+                    <div style={{
+                        height: '32px',
+                        background: 'var(--bg-panel)',
+                        borderBottom: '1px solid var(--border-color)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0 8px',
+                        gap: '8px'
+                    }}>
+                        <button
+                            className={`btn ${activeView === 'canvas' ? 'active' : ''}`}
+                            onClick={() => setActiveView('canvas')}
+                            style={{ fontSize: '11px', padding: '4px 8px', background: activeView === 'canvas' ? 'var(--bg-input)' : 'transparent' }}
+                        >
+                            Canvas
+                        </button>
+                        <button
+                            className={`btn ${activeView === 'graph' ? 'active' : ''}`}
+                            onClick={() => setActiveView('graph')}
+                            style={{ fontSize: '11px', padding: '4px 8px', background: activeView === 'graph' ? 'var(--bg-input)' : 'transparent' }}
+                        >
+                            State Machine
+                        </button>
+                    </div>
+                )}
+
+                <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                    {/* Canvas View */}
+                    <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                        visibility: activeView === 'canvas' ? 'visible' : 'hidden'
+                    }}>
+                        <Canvas
+                            shapes={shapes}
+                            selection={selection}
+                            setSelection={setSelection}
+                            tool={tool}
+                            addShape={addShape}
+                            updateShape={updateShape}
+                            updateShapes={updateShapes}
+                            onUpdateEnd={() => recordHistory(shapes, animations)}
+                            canvasSize={canvasSize}
+                            setCanvasSize={setCanvasSize}
+                            mode={mode}
+                        />
                     </div>
 
-                    {/* Floating Toolbar (Design Mode) */}
-                    {mode === 'design' && (
-                        <div className="toolbar">
-                            <button className={tool === 'select' ? 'active' : ''} onClick={() => setTool('select')} title="Select (V)"><Icons.Pointer /></button>
-                            <button className={tool === 'rect' ? 'active' : ''} onClick={() => setTool('rect')} title="Rectangle (R)"><Icons.Square /></button>
-                            <button className={tool === 'ellipse' ? 'active' : ''} onClick={() => setTool('ellipse')} title="Ellipse (O)"><Icons.Circle /></button>
-                            <button className={tool === 'pen' ? 'active' : ''} onClick={() => setTool('pen')} title="Pen (P)"><Icons.Pen /></button>
-                            <button className={tool === 'text' ? 'active' : ''} onClick={() => setTool('text')} title="Text (T)"><Icons.Type /></button>
-                            <button className={tool === 'artboard' ? 'active' : ''} onClick={() => setTool('artboard')} title="Artboard (A)"><Icons.Layout /></button>
+                    {/* State Machine View */}
+                    {mode === 'animate' && activeView === 'graph' && (
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+                            <StateMachineEditor
+                                states={smStates}
+                                transitions={smTransitions}
+                                onAddState={handleAddState}
+                                onAddTransition={handleAddTransition}
+                                onSelectNode={setSelectedNodeId}
+                                selectedNodeId={selectedNodeId}
+                                onSelectTransition={setSelectedTransitionId}
+                                selectedTransitionId={selectedTransitionId}
+                            />
                         </div>
                     )}
                 </div>
+            </div>
 
-                {/* Right Sidebar - Properties */}
-                <div className="sidebar-right">
-                    <Properties
-                        selection={selection}
-                        shapes={shapes}
-                        updateShapes={updateShapes}
-                    />
-                </div>
+            {/* Right Sidebar - Properties */}
+            <div className="sidebar-right">
+                <Properties
+                    selection={selection}
+                    shapes={shapes}
+                    updateShapes={updateShapes}
+                    canvasSize={canvasSize}
+                    updateShape={updateShape}
+                />
             </div>
 
             {/* Timeline Overlay */}
@@ -724,4 +739,5 @@ const App = () => {
         </div>
     );
 };
+
 window.App = App;

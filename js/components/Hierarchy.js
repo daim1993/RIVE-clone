@@ -1,3 +1,4 @@
+const React = window.React;
 const Icons = window.Icons;
 const Hierarchy = ({ shapes, selection, setSelection, onReparent, onMoveShape, onAddGroup }) => {
     const [draggedId, setDraggedId] = React.useState(null);

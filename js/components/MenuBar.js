@@ -1,3 +1,4 @@
+const React = window.React;
 const MenuBar = ({ onNew, onOpen, onExport, onUndo, onRedo, canvasSize, setCanvasSize }) => {
     const [activeMenu, setActiveMenu] = React.useState(null);
 

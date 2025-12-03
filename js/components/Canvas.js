@@ -1,3 +1,4 @@
+const React = window.React;
 const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, updateShapes, onUpdateEnd, canvasSize, compact = false, setCanvasSize }) => {
     const [isDragging, setIsDragging] = React.useState(false);
     const [isResizing, setIsResizing] = React.useState(false);
@@ -559,15 +560,20 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             const snappedDy = snapped.y - leaderInitial.y;
 
             // Apply this snapped delta to ALL selected shapes
+            const updates = [];
             selection.forEach(id => {
                 const initial = dragInfo.initialPositions[id];
                 if (initial) {
-                    updateShape(id, {
-                        x: initial.x + snappedDx,
-                        y: initial.y + snappedDy
+                    updates.push({
+                        id: id,
+                        props: {
+                            x: initial.x + snappedDx,
+                            y: initial.y + snappedDy
+                        }
                     });
                 }
             });
+            updateShapes(updates);
 
             // Do NOT update dragInfo here to prevent drift
         } else if (isResizing && resizeHandle && dragInfo && dragInfo.initialBounds) {
@@ -606,6 +612,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 const scaleY = newBounds.height / bounds.height;
 
                 // Apply to all selected shapes
+                const updates = [];
                 selection.forEach(id => {
                     const initial = initialShapes[id];
                     if (initial) {
@@ -616,14 +623,18 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                         const relH = initial.height / bounds.height;
 
                         // Apply to new bounds
-                        updateShape(id, {
-                            x: newBounds.x + relX * newBounds.width,
-                            y: newBounds.y + relY * newBounds.height,
-                            width: relW * newBounds.width,
-                            height: relH * newBounds.height
+                        updates.push({
+                            id: id,
+                            props: {
+                                x: newBounds.x + relX * newBounds.width,
+                                y: newBounds.y + relY * newBounds.height,
+                                width: relW * newBounds.width,
+                                height: relH * newBounds.height
+                            }
                         });
                     }
                 });
+                updateShapes(updates);
             }
         } else if (isRotating && dragInfo && dragInfo.initialBounds) {
             const bounds = dragInfo.initialBounds;
@@ -642,6 +653,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             const rotationDelta = finalAngle - startAngle;
 
             // Apply rotation to all selected shapes
+            const updates = [];
             selection.forEach(id => {
                 const initial = initialShapes[id];
                 if (initial) {
@@ -659,13 +671,17 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                     const newCenterX = centerX + (dx * cos - dy * sin);
                     const newCenterY = centerY + (dx * sin + dy * cos);
 
-                    updateShape(id, {
-                        x: newCenterX - initial.width / 2,
-                        y: newCenterY - initial.height / 2,
-                        rotation: (initial.rotation || 0) + rotationDelta
+                    updates.push({
+                        id: id,
+                        props: {
+                            x: newCenterX - initial.width / 2,
+                            y: newCenterY - initial.height / 2,
+                            rotation: (initial.rotation || 0) + rotationDelta
+                        }
                     });
                 }
             });
+            updateShapes(updates);
         }
     };
 
@@ -1125,205 +1141,205 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     };
 
     return (
-        <div className="canvas-area" ref={containerRef} onMouseDown={handleCanvasMouseDown} onDoubleClick={handleCanvasDoubleClick}>
-            <div
-                className="artboard"
-                style={{
-                    width: canvasSize.width,
-                    height: canvasSize.height,
-                    position: 'absolute',
-                    left: artboardOffset.x,
-                    top: artboardOffset.y,
-                    border: tool === 'artboard' ? '2px solid #10b981' : '1px solid var(--border-color)'
-                }}
-                ref={canvasRef}
-            >
-                <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
-                    <defs>
-                        {/* Blur and Glass Effect Filters */}
-                        {shapes.map(shape => {
-                            const filters = [];
+        <div
+            className="artboard"
+            style={{
+                width: canvasSize.width,
+                height: canvasSize.height,
+                position: 'absolute',
+                left: artboardOffset.x,
+                top: artboardOffset.y,
+                border: tool === 'artboard' ? '2px solid #10b981' : '1px solid var(--border-color)'
+            }}
+            ref={canvasRef}
+            onMouseDown={handleCanvasMouseDown}
+            onDoubleClick={handleCanvasDoubleClick}
+        >
+            <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
+                <defs>
+                    {/* Blur and Glass Effect Filters */}
+                    {shapes.map(shape => {
+                        const filters = [];
 
-                            // Regular blur filter
-                            if (shape.blur && shape.blur > 0) {
-                                filters.push(
-                                    <filter key={`blur-${shape.id}`} id={`blur-${shape.id}`}>
-                                        <feGaussianBlur in="SourceGraphic" stdDeviation={shape.blur} />
-                                    </filter>
-                                );
-                            }
-
-                            // Glass effect filter (simple blur for now)
-                            if (shape.glassEffect) {
-                                const glassBlur = shape.glassBlur || 10;
-                                filters.push(
-                                    <filter key={`glass-${shape.id}`} id={`glass-${shape.id}`}>
-                                        <feGaussianBlur in="SourceGraphic" stdDeviation={glassBlur} />
-                                    </filter>
-                                );
-                            }
-
-                            return filters;
-                        })}
-                    </defs>
-                    {tree.map(root => renderShapeRecursiveWithSelection(root))}
-
-                    {/* Unified Bounding Box for Selection */}
-                    {selection.length > 0 && !isEditingPath && renderBoundingBox(calculateMultiSelectionBounds())}
-
-                    {/* Drawing Preview */}
-                    {isDrawing && pathPoints.length > 0 && (
-                        <g>
-                            <path
-                                d={pathPoints.map((p, i) => {
-                                    if (i === 0) return `M ${p.x} ${p.y}`;
-                                    const prev = pathPoints[i - 1];
-                                    return `C ${prev.x + prev.hx} ${prev.y + prev.hy} ${p.x - p.hx} ${p.y - p.hy} ${p.x} ${p.y}`;
-                                }).join(' ')}
-                                fill="none"
-                                stroke="#10b981"
-                                strokeWidth="2"
-                                strokeDasharray="4 2"
-                            />
-                            {pathPoints.map((p, i) => (
-                                <circle key={i} cx={p.x} cy={p.y} r="3" fill="#10b981" />
-                            ))}
-                        </g>
-                    )}
-                </svg>
-
-                {/* Smart Guides Overlay */}
-                <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', overflow: 'visible' }}>
-                    {smartGuides.map((guide, i) => (
-                        <line
-                            key={i}
-                            x1={guide.type === 'vertical' ? guide.x : guide.x1}
-                            y1={guide.type === 'vertical' ? guide.y1 : guide.y}
-                            x2={guide.type === 'vertical' ? guide.x : guide.x2}
-                            y2={guide.type === 'vertical' ? guide.y2 : guide.y}
-                            stroke="#ec4899"
-                            strokeWidth="1"
-                            strokeDasharray="4 2"
-                        />
-                    ))}
-
-                    {/* Selection Rectangle */}
-                    {selectionRect && (
-                        <rect
-                            x={selectionRect.x}
-                            y={selectionRect.y}
-                            width={selectionRect.width}
-                            height={selectionRect.height}
-                            fill="rgba(99, 102, 241, 0.1)"
-                            stroke="#6366f1"
-                            strokeWidth="1.5"
-                            strokeDasharray="4 2"
-                            pointerEvents="none"
-                        />
-                    )}
-                </svg>
-
-                {/* Artboard Controls */}
-                {tool === 'artboard' && (
-                    <>
-                        {/* Drag handle to move artboard */}
-                        <div
-                            style={{
-                                position: 'absolute',
-                                top: -30,
-                                left: 0,
-                                background: '#10b981',
-                                color: 'white',
-                                padding: '4px 12px',
-                                fontSize: '11px',
-                                cursor: 'move',
-                                borderRadius: '4px 4px 0 0',
-                                userSelect: 'none'
-                            }}
-                            onMouseDown={(e) => {
-                                e.stopPropagation();
-                                setIsDraggingArtboard(true);
-                                const coords = getCanvasCoords(e);
-                                setDragStart(coords);
-                            }}
-                        >
-                            📐 Artboard: {Math.round(canvasSize.width)} x {Math.round(canvasSize.height)}
-                        </div>
-
-                        {/* Resize handles */}
-                        <div style={{ position: 'absolute', right: -5, top: '50%', width: 10, height: 10, background: '#10b981', cursor: 'ew-resize', pointerEvents: 'auto', borderRadius: '50%' }} onMouseDown={(e) => handleResizeMouseDown(e, 'e')} />
-                        <div style={{ position: 'absolute', bottom: -5, left: '50%', width: 10, height: 10, background: '#10b981', cursor: 'ns-resize', pointerEvents: 'auto', borderRadius: '50%' }} onMouseDown={(e) => handleResizeMouseDown(e, 's')} />
-                        <div style={{ position: 'absolute', right: -5, bottom: -5, width: 10, height: 10, background: '#10b981', cursor: 'nwse-resize', pointerEvents: 'auto', borderRadius: '50%' }} onMouseDown={(e) => handleResizeMouseDown(e, 'se')} />
-                    </>
-                )}
-
-                {/* Clip Path Definitions for Glass Effect on Custom Paths */}
-                <svg width="0" height="0" style={{ position: 'absolute' }}>
-                    <defs>
-                        {shapes.filter(s => s.glassEffect && s.type === 'path' && s.pathData).map(shape => (
-                            <clipPath key={`clip-${shape.id}`} id={`glass-clip-${shape.id}`} clipPathUnits="objectBoundingBox">
-                                <path
-                                    d={shape.pathData}
-                                    transform={`scale(${1 / (shape.width || 1)} ${1 / (shape.height || 1)})`}
-                                />
-                            </clipPath>
-                        ))}
-                    </defs>
-                </svg>
-
-                {/* Glass Effect Overlay - CSS backdrop-filter for true glassmorphism */}
-                {shapes.filter(s => s.glassEffect).map(shape => {
-                    const glassBlur = shape.glassBlur || 10;
-                    const glassOpacity = shape.glassOpacity || 0.3;
-                    const rotation = shape.rotation || 0;
-                    const isSelected = selection.includes(shape.id);
-
-                    // Calculate corner radius for different shape types
-                    let borderRadius = '0px';
-                    let clipPath = null;
-
-                    if (shape.type === 'rect') {
-                        if (shape.cornerRadius) {
-                            borderRadius = `${shape.cornerRadius}px`;
-                        } else if (shape.cornerRadiusTL || shape.cornerRadiusTR || shape.cornerRadiusBR || shape.cornerRadiusBL) {
-                            borderRadius = `${shape.cornerRadiusTL || 0}px ${shape.cornerRadiusTR || 0}px ${shape.cornerRadiusBR || 0}px ${shape.cornerRadiusBL || 0}px`;
+                        // Regular blur filter
+                        if (shape.blur && shape.blur > 0) {
+                            filters.push(
+                                <filter key={`blur-${shape.id}`} id={`blur-${shape.id}`}>
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation={shape.blur} />
+                                </filter>
+                            );
                         }
-                    } else if (shape.type === 'ellipse') {
-                        borderRadius = '50%';
-                    } else if (shape.type === 'path' && shape.pathData) {
-                        // Use SVG clip-path for custom paths
-                        clipPath = `url(#glass-clip-${shape.id})`;
-                    }
 
-                    return (
-                        <div
-                            key={`glass-${shape.id}`}
-                            style={{
-                                position: 'absolute',
-                                left: shape.x,
-                                top: shape.y,
-                                width: shape.width,
-                                height: shape.height,
-                                transform: `rotate(${rotation}deg) scale(${shape.scaleX || 1}, ${shape.scaleY || 1})`,
-                                transformOrigin: 'center center',
-                                backdropFilter: `blur(${glassBlur}px)`,
-                                WebkitBackdropFilter: `blur(${glassBlur}px)`,
-                                backgroundColor: shape.fill ? `${shape.fill}${Math.round(glassOpacity * 255).toString(16).padStart(2, '0')}` : `rgba(255, 255, 255, ${glassOpacity})`,
-                                border: shape.stroke ? `${shape.strokeWidth || 1}px solid ${shape.stroke}` : `1px solid rgba(255, 255, 255, 0.3)`,
-                                borderRadius: borderRadius,
-                                clipPath: clipPath,
-                                WebkitClipPath: clipPath,
-                                boxShadow: isSelected ? '0 0 0 2px #6366f1' : 'none',
-                                cursor: 'move',
-                                transition: 'box-shadow 0.2s ease',
-                                pointerEvents: 'auto'
-                            }}
-                            onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
-                            onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)}
+                        // Glass effect filter (simple blur for now)
+                        if (shape.glassEffect) {
+                            const glassBlur = shape.glassBlur || 10;
+                            filters.push(
+                                <filter key={`glass-${shape.id}`} id={`glass-${shape.id}`}>
+                                    <feGaussianBlur in="SourceGraphic" stdDeviation={glassBlur} />
+                                </filter>
+                            );
+                        }
+
+                        return filters;
+                    })}
+                </defs>
+                {tree.map(root => renderShapeRecursiveWithSelection(root))}
+
+                {/* Unified Bounding Box for Selection */}
+                {selection.length > 0 && !isEditingPath && renderBoundingBox(calculateMultiSelectionBounds())}
+
+                {/* Drawing Preview */}
+                {isDrawing && pathPoints.length > 0 && (
+                    <g>
+                        <path
+                            d={pathPoints.map((p, i) => {
+                                if (i === 0) return `M ${p.x} ${p.y}`;
+                                const prev = pathPoints[i - 1];
+                                return `C ${prev.x + prev.hx} ${prev.y + prev.hy} ${p.x - p.hx} ${p.y - p.hy} ${p.x} ${p.y}`;
+                            }).join(' ')}
+                            fill="none"
+                            stroke="#10b981"
+                            strokeWidth="2"
+                            strokeDasharray="4 2"
                         />
-                    );
-                })}
-            </div>
+                        {pathPoints.map((p, i) => (
+                            <circle key={i} cx={p.x} cy={p.y} r="3" fill="#10b981" />
+                        ))}
+                    </g>
+                )}
+            </svg>
+
+            {/* Smart Guides Overlay */}
+            <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', overflow: 'visible' }}>
+                {smartGuides.map((guide, i) => (
+                    <line
+                        key={i}
+                        x1={guide.type === 'vertical' ? guide.x : guide.x1}
+                        y1={guide.type === 'vertical' ? guide.y1 : guide.y}
+                        x2={guide.type === 'vertical' ? guide.x : guide.x2}
+                        y2={guide.type === 'vertical' ? guide.y2 : guide.y}
+                        stroke="#ec4899"
+                        strokeWidth="1"
+                        strokeDasharray="4 2"
+                    />
+                ))}
+
+                {/* Selection Rectangle */}
+                {selectionRect && (
+                    <rect
+                        x={selectionRect.x}
+                        y={selectionRect.y}
+                        width={selectionRect.width}
+                        height={selectionRect.height}
+                        fill="rgba(99, 102, 241, 0.1)"
+                        stroke="#6366f1"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 2"
+                        pointerEvents="none"
+                    />
+                )}
+            </svg>
+
+            {/* Artboard Controls */}
+            {tool === 'artboard' && (
+                <>
+                    {/* Drag handle to move artboard */}
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: -30,
+                            left: 0,
+                            background: '#10b981',
+                            color: 'white',
+                            padding: '4px 12px',
+                            fontSize: '11px',
+                            cursor: 'move',
+                            borderRadius: '4px 4px 0 0',
+                            userSelect: 'none'
+                        }}
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            setIsDraggingArtboard(true);
+                            const coords = getCanvasCoords(e);
+                            setDragStart(coords);
+                        }}
+                    >
+                        📐 Artboard: {Math.round(canvasSize.width)} x {Math.round(canvasSize.height)}
+                    </div>
+
+                    {/* Resize handles */}
+                    <div style={{ position: 'absolute', right: -5, top: '50%', width: 10, height: 10, background: '#10b981', cursor: 'ew-resize', pointerEvents: 'auto', borderRadius: '50%' }} onMouseDown={(e) => handleResizeMouseDown(e, 'e')} />
+                    <div style={{ position: 'absolute', bottom: -5, left: '50%', width: 10, height: 10, background: '#10b981', cursor: 'ns-resize', pointerEvents: 'auto', borderRadius: '50%' }} onMouseDown={(e) => handleResizeMouseDown(e, 's')} />
+                    <div style={{ position: 'absolute', right: -5, bottom: -5, width: 10, height: 10, background: '#10b981', cursor: 'nwse-resize', pointerEvents: 'auto', borderRadius: '50%' }} onMouseDown={(e) => handleResizeMouseDown(e, 'se')} />
+                </>
+            )}
+
+            {/* Clip Path Definitions for Glass Effect on Custom Paths */}
+            <svg width="0" height="0" style={{ position: 'absolute' }}>
+                <defs>
+                    {shapes.filter(s => s.glassEffect && s.type === 'path' && s.pathData).map(shape => (
+                        <clipPath key={`clip-${shape.id}`} id={`glass-clip-${shape.id}`} clipPathUnits="objectBoundingBox">
+                            <path
+                                d={shape.pathData}
+                                transform={`scale(${1 / (shape.width || 1)} ${1 / (shape.height || 1)})`}
+                            />
+                        </clipPath>
+                    ))}
+                </defs>
+            </svg>
+
+            {/* Glass Effect Overlay - CSS backdrop-filter for true glassmorphism */}
+            {shapes.filter(s => s.glassEffect).map(shape => {
+                const glassBlur = shape.glassBlur || 10;
+                const glassOpacity = shape.glassOpacity || 0.3;
+                const rotation = shape.rotation || 0;
+                const isSelected = selection.includes(shape.id);
+
+                // Calculate corner radius for different shape types
+                let borderRadius = '0px';
+                let clipPath = null;
+
+                if (shape.type === 'rect') {
+                    if (shape.cornerRadius) {
+                        borderRadius = `${shape.cornerRadius}px`;
+                    } else if (shape.cornerRadiusTL || shape.cornerRadiusTR || shape.cornerRadiusBR || shape.cornerRadiusBL) {
+                        borderRadius = `${shape.cornerRadiusTL || 0}px ${shape.cornerRadiusTR || 0}px ${shape.cornerRadiusBR || 0}px ${shape.cornerRadiusBL || 0}px`;
+                    }
+                } else if (shape.type === 'ellipse') {
+                    borderRadius = '50%';
+                } else if (shape.type === 'path' && shape.pathData) {
+                    // Use SVG clip-path for custom paths
+                    clipPath = `url(#glass-clip-${shape.id})`;
+                }
+
+                return (
+                    <div
+                        key={`glass-${shape.id}`}
+                        style={{
+                            position: 'absolute',
+                            left: shape.x,
+                            top: shape.y,
+                            width: shape.width,
+                            height: shape.height,
+                            transform: `rotate(${rotation}deg) scale(${shape.scaleX || 1}, ${shape.scaleY || 1})`,
+                            transformOrigin: 'center center',
+                            backdropFilter: `blur(${glassBlur}px)`,
+                            WebkitBackdropFilter: `blur(${glassBlur}px)`,
+                            backgroundColor: shape.fill ? `${shape.fill}${Math.round(glassOpacity * 255).toString(16).padStart(2, '0')}` : `rgba(255, 255, 255, ${glassOpacity})`,
+                            border: shape.stroke ? `${shape.strokeWidth || 1}px solid ${shape.stroke}` : `1px solid rgba(255, 255, 255, 0.3)`,
+                            borderRadius: borderRadius,
+                            clipPath: clipPath,
+                            WebkitClipPath: clipPath,
+                            boxShadow: isSelected ? '0 0 0 2px #6366f1' : 'none',
+                            cursor: 'move',
+                            transition: 'box-shadow 0.2s ease',
+                            pointerEvents: 'auto'
+                        }}
+                        onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
+                        onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)}
+                    />
+                );
+            })}
         </div>
     );
 };

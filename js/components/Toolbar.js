@@ -1,3 +1,4 @@
+const React = window.React;
 const Icons = window.Icons;
 const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG }) => {
     const fileInputRef = React.useRef(null);
@@ -23,7 +24,7 @@ const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG }) => {
                     <tool.icon />
                 </div>
             ))}
-            <div style={{ borderTop: '1px solid var(--border-color)', margin: '8px 0', width: '100%' }}></div>
+            <div style={{ width: '1px', height: '24px', background: 'var(--border-color)', margin: '0 8px' }}></div>
             <div
                 className="tool-btn"
                 onClick={() => fileInputRef.current?.click()}

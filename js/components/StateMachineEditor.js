@@ -1,3 +1,4 @@
+const React = window.React;
 const Icons = window.Icons;
 
 const StateMachineEditor = ({ states, transitions, onAddState, onAddTransition, onSelectNode, selectedNodeId, selectedTransitionId, onSelectTransition }) => {
