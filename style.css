@@ -43,26 +43,85 @@ body {
 
 /* Layout */
 .app-container {
-    display: grid;
-    grid-template-columns: var(--toolbar-width) var(--sidebar-width) 1fr var(--sidebar-width);
-    grid-template-rows: var(--header-height) 30px 1fr var(--timeline-height);
     height: 100vh;
     width: 100vw;
-    grid-template-areas:
-        "header header header header"
-        "menubar menubar menubar menubar"
-        "toolbar left-panel canvas right-panel"
-        "toolbar left-panel timeline right-panel";
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.layout-root {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+}
+
+.layout-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.layout-container.row {
+    flex-direction: row;
+}
+
+.layout-container.col {
+    flex-direction: column;
+}
+
+.layout-panel {
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-panel);
+    overflow: hidden;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+}
+
+.panel-content-wrapper {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.layout-resizer {
+    z-index: 100;
+    background-color: var(--border-color);
+    transition: background-color 0.2s;
+}
+
+.layout-resizer:hover,
+.layout-resizer.dragging {
+    background-color: var(--accent);
+}
+
+.layout-resizer.row {
+    width: 4px;
+    cursor: col-resize;
+    height: 100%;
+}
+
+.layout-resizer.col {
+    height: 4px;
+    cursor: row-resize;
+    width: 100%;
 }
 
 /* Menu Bar */
 .menu-bar {
-    grid-area: menubar;
+    /* grid-area: menubar; */
+    background-color: var(--bg-panel);
+    border-bottom: 1px solid var(--border-color);
 }
 
 /* Header */
 .header {
-    grid-area: header;
+    /* grid-area: header; */
     background-color: var(--bg-panel);
     border-bottom: 1px solid var(--border-color);
     display: flex;
@@ -79,6 +138,7 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
+    margin-right: 24px;
 }
 
 .logo span {
@@ -149,19 +209,17 @@ body {
 
 /* Toolbar */
 .toolbar {
-    grid-area: toolbar;
-    background-color: var(--bg-panel);
-    border-right: 1px solid var(--border-color);
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    padding-top: 12px;
-    gap: 8px;
+    gap: 4px;
+    margin-right: auto;
+    /* Push remaining items to right */
 }
 
 .tool-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 6px;
     display: flex;
     align-items: center;
@@ -190,11 +248,11 @@ body {
 }
 
 .left-panel {
-    grid-area: left-panel;
+    /* grid-area: left-panel; */
 }
 
 .right-panel {
-    grid-area: right-panel;
+    /* grid-area: right-panel; */
     border-left: 1px solid var(--border-color);
     border-right: none;
 }
@@ -281,7 +339,7 @@ body {
 
 /* Canvas */
 .canvas-area {
-    grid-area: canvas;
+    /* grid-area: canvas; */
     background-color: #000;
     position: relative;
     overflow: hidden;
@@ -300,7 +358,7 @@ body {
 
 /* Timeline */
 .timeline {
-    grid-area: timeline;
+    /* grid-area: timeline; */
     background-color: var(--bg-panel);
     border-top: 1px solid var(--border-color);
     display: flex;
@@ -446,18 +504,21 @@ body {
 .animate-fade-in {
     animation: fadeIn 0.3s ease-out;
 }
+
 /* Timeline Overlay */
-.timeline {
-    position: fixed !important;
-    bottom: 0;
-    left: var(--toolbar-width);
-    right: 0;
-    height: var(--timeline-height);
-    z-index: 100;
-    animation: slideUp 0.3s ease-out;
+.timeline-overlay {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
 }
 
 @keyframes slideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+    from {
+        transform: translateY(100%);
+    }
+
+    to {
+        transform: translateY(0);
+    }
 }

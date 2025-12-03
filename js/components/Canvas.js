@@ -1,3 +1,4 @@
+const React = window.React;
 const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, updateShapes, onUpdateEnd, canvasSize, compact = false, setCanvasSize }) => {
     const [isDragging, setIsDragging] = React.useState(false);
     const [isResizing, setIsResizing] = React.useState(false);
@@ -21,16 +22,44 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     const canvasRef = React.useRef(null);
     const containerRef = React.useRef(null);
 
-    // Center artboard on mount
+    // Refs for event listeners to avoid stale closures
+    const stateRef = React.useRef({
+        shapes, selection, tool, canvasSize,
+        isDragging, isResizing, isRotating, isSelecting, isDrawing, isEditingPath,
+        dragStart, dragInfo, resizeHandle, pathPoints, activePointIndex,
+        draggedPointIndex, draggedHandleType, artboardOffset, isDraggingArtboard,
+        draggedShapeId, selectionRect
+    });
+
+    React.useEffect(() => {
+        stateRef.current = {
+            shapes, selection, tool, canvasSize,
+            isDragging, isResizing, isRotating, isSelecting, isDrawing, isEditingPath,
+            dragStart, dragInfo, resizeHandle, pathPoints, activePointIndex,
+            draggedPointIndex, draggedHandleType, artboardOffset, isDraggingArtboard,
+            draggedShapeId, selectionRect
+        };
+    }, [shapes, selection, tool, canvasSize, isDragging, isResizing, isRotating, isSelecting, isDrawing, isEditingPath, dragStart, dragInfo, resizeHandle, pathPoints, activePointIndex, draggedPointIndex, draggedHandleType, artboardOffset, isDraggingArtboard, draggedShapeId, selectionRect]);
+
+    // Center artboard on mount and when canvas size changes
     React.useEffect(() => {
         if (containerRef.current) {
             const { width, height } = containerRef.current.getBoundingClientRect();
+            console.log('Canvas Container Size:', width, height);
+            console.log('Artboard Size:', canvasSize.width, canvasSize.height);
+
+            const newX = (width - canvasSize.width) / 2;
+            const newY = (height - canvasSize.height) / 2;
+            console.log('New Artboard Offset:', newX, newY);
+
             setArtboardOffset({
-                x: (width - canvasSize.width) / 2,
-                y: (height - canvasSize.height) / 2
+                x: newX,
+                y: newY
             });
+        } else {
+            console.warn('Canvas container ref is null');
         }
-    }, []);
+    }, [canvasSize]);
 
     const snapToGuides = (x, y, width, height, excludeId) => {
         const SNAP_THRESHOLD = 5;
@@ -394,7 +423,18 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         setDragInfo({ initialBounds: bounds, initialShapes });
     };
 
-    const handleMouseMove = (e) => {
+    // Store handlers in refs to avoid stale closures
+    const handlersRef = React.useRef({});
+
+    handlersRef.current.handleMouseMove = (e) => {
+        const {
+            shapes, selection, tool, canvasSize,
+            isDragging, isResizing, isRotating, isSelecting, isDrawing, isEditingPath,
+            dragStart, dragInfo, resizeHandle, pathPoints, activePointIndex,
+            draggedPointIndex, draggedHandleType, artboardOffset, isDraggingArtboard,
+            draggedShapeId
+        } = stateRef.current;
+
         const coords = getCanvasCoords(e);
         const dx = coords.x - dragStart.x;
         const dy = coords.y - dragStart.y;
@@ -495,10 +535,6 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 minY = Math.min(minY, p.y);
                 maxX = Math.max(maxX, p.x);
                 maxY = Math.max(maxY, p.y);
-
-                // Also account for handles? Usually bounds are just points, but for precise SVG bounds 
-                // we might care about control points. For now, let's stick to anchor points for the "frame"
-                // to match standard vector tool behavior (frame follows anchors).
             });
 
             // 3. Normalize points to new bounding box
@@ -559,15 +595,20 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             const snappedDy = snapped.y - leaderInitial.y;
 
             // Apply this snapped delta to ALL selected shapes
+            const updates = [];
             selection.forEach(id => {
                 const initial = dragInfo.initialPositions[id];
                 if (initial) {
-                    updateShape(id, {
-                        x: initial.x + snappedDx,
-                        y: initial.y + snappedDy
+                    updates.push({
+                        id: id,
+                        props: {
+                            x: initial.x + snappedDx,
+                            y: initial.y + snappedDy
+                        }
                     });
                 }
             });
+            updateShapes(updates);
 
             // Do NOT update dragInfo here to prevent drift
         } else if (isResizing && resizeHandle && dragInfo && dragInfo.initialBounds) {
@@ -606,6 +647,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 const scaleY = newBounds.height / bounds.height;
 
                 // Apply to all selected shapes
+                const updates = [];
                 selection.forEach(id => {
                     const initial = initialShapes[id];
                     if (initial) {
@@ -616,14 +658,18 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                         const relH = initial.height / bounds.height;
 
                         // Apply to new bounds
-                        updateShape(id, {
-                            x: newBounds.x + relX * newBounds.width,
-                            y: newBounds.y + relY * newBounds.height,
-                            width: relW * newBounds.width,
-                            height: relH * newBounds.height
+                        updates.push({
+                            id: id,
+                            props: {
+                                x: newBounds.x + relX * newBounds.width,
+                                y: newBounds.y + relY * newBounds.height,
+                                width: relW * newBounds.width,
+                                height: relH * newBounds.height
+                            }
                         });
                     }
                 });
+                updateShapes(updates);
             }
         } else if (isRotating && dragInfo && dragInfo.initialBounds) {
             const bounds = dragInfo.initialBounds;
@@ -642,6 +688,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             const rotationDelta = finalAngle - startAngle;
 
             // Apply rotation to all selected shapes
+            const updates = [];
             selection.forEach(id => {
                 const initial = initialShapes[id];
                 if (initial) {
@@ -659,17 +706,29 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                     const newCenterX = centerX + (dx * cos - dy * sin);
                     const newCenterY = centerY + (dx * sin + dy * cos);
 
-                    updateShape(id, {
-                        x: newCenterX - initial.width / 2,
-                        y: newCenterY - initial.height / 2,
-                        rotation: (initial.rotation || 0) + rotationDelta
+                    updates.push({
+                        id: id,
+                        props: {
+                            x: newCenterX - initial.width / 2,
+                            y: newCenterY - initial.height / 2,
+                            rotation: (initial.rotation || 0) + rotationDelta
+                        }
                     });
                 }
             });
+            updateShapes(updates);
         }
     };
 
-    const handleMouseUp = (e) => {
+    handlersRef.current.handleMouseUp = (e) => {
+        const {
+            shapes, selection, tool, canvasSize,
+            isDragging, isResizing, isRotating, isSelecting, isDrawing, isEditingPath,
+            dragStart, dragInfo, resizeHandle, pathPoints, activePointIndex,
+            draggedPointIndex, draggedHandleType, artboardOffset, isDraggingArtboard,
+            draggedShapeId, selectionRect
+        } = stateRef.current;
+
         if (tool === 'pen' && isDragging && !isEditingPath) {
             setIsDragging(false);
             return;
@@ -722,15 +781,18 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     };
 
     React.useEffect(() => {
+        const handleMove = (e) => handlersRef.current.handleMouseMove(e);
+        const handleUp = (e) => handlersRef.current.handleMouseUp(e);
+
         if (isDragging || isResizing || isRotating || isSelecting) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleUp);
             return () => {
-                window.removeEventListener('mousemove', handleMouseMove);
-                window.removeEventListener('mouseup', handleMouseUp);
+                window.removeEventListener('mousemove', handleMove);
+                window.removeEventListener('mouseup', handleUp);
             };
         }
-    }, [isDragging, isResizing, isRotating, isSelecting, dragStart, selection, tool, canvasSize]);
+    }, [isDragging, isResizing, isRotating, isSelecting]);
 
     const selectedShape = selection.length > 0 ? shapes.find(s => s.id === selection[0]) : null;
     const tree = buildTree(shapes);
@@ -1125,7 +1187,12 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     };
 
     return (
-        <div className="canvas-area" ref={containerRef} onMouseDown={handleCanvasMouseDown} onDoubleClick={handleCanvasDoubleClick}>
+        <div
+            ref={containerRef}
+            style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}
+            onMouseDown={handleCanvasMouseDown}
+            onDoubleClick={handleCanvasDoubleClick}
+        >
             <div
                 className="artboard"
                 style={{

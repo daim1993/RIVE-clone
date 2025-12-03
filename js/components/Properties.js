@@ -1,5 +1,6 @@
 
 
+const React = window.React;
 const Icons = window.Icons;
 
 const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }) => {
