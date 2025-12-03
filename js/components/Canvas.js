@@ -423,7 +423,10 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         setDragInfo({ initialBounds: bounds, initialShapes });
     };
 
-    const handleMouseMove = (e) => {
+    // Store handlers in refs to avoid stale closures
+    const handlersRef = React.useRef({});
+
+    handlersRef.current.handleMouseMove = (e) => {
         const {
             shapes, selection, tool, canvasSize,
             isDragging, isResizing, isRotating, isSelecting, isDrawing, isEditingPath,
@@ -717,7 +720,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         }
     };
 
-    const handleMouseUp = (e) => {
+    handlersRef.current.handleMouseUp = (e) => {
         const {
             shapes, selection, tool, canvasSize,
             isDragging, isResizing, isRotating, isSelecting, isDrawing, isEditingPath,
@@ -778,12 +781,15 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
     };
 
     React.useEffect(() => {
+        const handleMove = (e) => handlersRef.current.handleMouseMove(e);
+        const handleUp = (e) => handlersRef.current.handleMouseUp(e);
+
         if (isDragging || isResizing || isRotating || isSelecting) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleUp);
             return () => {
-                window.removeEventListener('mousemove', handleMouseMove);
-                window.removeEventListener('mouseup', handleMouseUp);
+                window.removeEventListener('mousemove', handleMove);
+                window.removeEventListener('mouseup', handleUp);
             };
         }
     }, [isDragging, isResizing, isRotating, isSelecting]);

@@ -1,4 +1,154 @@
-const { useState, useEffect, useRef, useMemo } = React;
+const { useState, useEffect, useRef, useMemo, createContext, useContext } = React;
+
+const AppContext = createContext(null);
+
+const HierarchyWrapper = () => {
+    const { shapes, selection, setSelection, handleMoveShape, handleReparent, handleAddGroup } = useContext(AppContext);
+    const Hierarchy = window.Hierarchy;
+    return (
+        <Hierarchy
+            shapes={shapes}
+            selection={selection}
+            setSelection={setSelection}
+            onMoveShape={handleMoveShape}
+            onReparent={handleReparent}
+            onAddGroup={handleAddGroup}
+        />
+    );
+};
+
+const PropertiesWrapper = () => {
+    const { selection, shapes, updateShapes, canvasSize, updateShape } = useContext(AppContext);
+    const Properties = window.Properties;
+    return (
+        <Properties
+            selection={selection}
+            shapes={shapes}
+            updateShapes={updateShapes}
+            canvasSize={canvasSize}
+            updateShape={updateShape}
+        />
+    );
+};
+
+const TimelineWrapper = () => {
+    const {
+        isTimelineVisible, setIsTimelineVisible, isPlaying, setIsPlaying, currentTime, setCurrentTime,
+        duration, setDuration, shapes, selection, keyframes, addKeyframe, deleteKeyframe,
+        animations, activeAnimationId, setActiveAnimationId, addAnimation,
+        smInputs, setSmInputs, smTransitions, handleUpdateTransition, selectedTransitionId
+    } = useContext(AppContext);
+    const Timeline = window.Timeline;
+
+    return (
+        <Timeline
+            isVisible={isTimelineVisible}
+            onToggle={() => setIsTimelineVisible(!isTimelineVisible)}
+            isPlaying={isPlaying}
+            setIsPlaying={setIsPlaying}
+            currentTime={currentTime}
+            setCurrentTime={setCurrentTime}
+            duration={duration}
+            setDuration={setDuration}
+            shapes={shapes}
+            selection={selection}
+            keyframes={keyframes}
+            addKeyframe={addKeyframe}
+            deleteKeyframe={deleteKeyframe}
+            animations={animations}
+            activeAnimationId={activeAnimationId}
+            setActiveAnimationId={setActiveAnimationId}
+            addAnimation={addAnimation}
+            // State Machine Props
+            smInputs={smInputs}
+            setSmInputs={setSmInputs}
+            selectedTransition={smTransitions.find(t => t.id === selectedTransitionId)}
+            onUpdateTransition={handleUpdateTransition}
+        />
+    );
+};
+
+const CanvasWrapper = () => {
+    const {
+        shapes, selection, setSelection, tool, addShape, updateShape, updateShapes, recordHistory,
+        canvasSize, setCanvasSize, mode, activeView, setActiveView, animations,
+        smStates, smTransitions, handleAddState, handleAddTransition, setSelectedNodeId, selectedNodeId,
+        setSelectedTransitionId, selectedTransitionId
+    } = useContext(AppContext);
+
+    const Canvas = window.Canvas;
+    const StateMachineEditor = window.StateMachineEditor;
+
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* View Switcher (Only in Animate Mode) */}
+            {mode === 'animate' && (
+                <div style={{
+                    height: '32px',
+                    background: 'var(--bg-panel)',
+                    borderBottom: '1px solid var(--border-color)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 8px',
+                    gap: '8px'
+                }}>
+                    <button
+                        className={`btn ${activeView === 'canvas' ? 'active' : ''}`}
+                        onClick={() => setActiveView('canvas')}
+                        style={{ fontSize: '11px', padding: '4px 8px', background: activeView === 'canvas' ? 'var(--bg-input)' : 'transparent' }}
+                    >
+                        Canvas
+                    </button>
+                    <button
+                        className={`btn ${activeView === 'graph' ? 'active' : ''}`}
+                        onClick={() => setActiveView('graph')}
+                        style={{ fontSize: '11px', padding: '4px 8px', background: activeView === 'graph' ? 'var(--bg-input)' : 'transparent' }}
+                    >
+                        State Machine
+                    </button>
+                </div>
+            )}
+
+            <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+                {/* Canvas View */}
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    visibility: activeView === 'canvas' ? 'visible' : 'hidden'
+                }}>
+                    <Canvas
+                        shapes={shapes}
+                        selection={selection}
+                        setSelection={setSelection}
+                        tool={tool}
+                        addShape={addShape}
+                        updateShape={updateShape}
+                        updateShapes={updateShapes}
+                        onUpdateEnd={() => recordHistory(shapes, animations)}
+                        canvasSize={canvasSize}
+                        setCanvasSize={setCanvasSize}
+                        mode={mode}
+                    />
+                </div>
+
+                {/* State Machine View */}
+                {mode === 'animate' && activeView === 'graph' && (
+                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+                        <StateMachineEditor
+                            states={smStates}
+                            transitions={smTransitions}
+                            onAddState={handleAddState}
+                            onAddTransition={handleAddTransition}
+                            onSelectNode={setSelectedNodeId}
+                            selectedNodeId={selectedNodeId}
+                            onSelectTransition={setSelectedTransitionId}
+                            selectedTransitionId={selectedTransitionId}
+                        />
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
 
 const App = () => {
     // Access components from window inside the component
@@ -609,192 +759,97 @@ const App = () => {
         setSmTransitions(smTransitions.map(t => t.id === id ? { ...t, ...updates } : t));
     };
 
-    // Component Map for Layout
+    // Context Value
+    const contextValue = {
+        shapes, selection, setSelection, tool, addShape, updateShape, updateShapes, recordHistory,
+        canvasSize, setCanvasSize, mode, activeView, setActiveView, animations,
+        smStates, smTransitions, smInputs, setSmInputs, handleUpdateTransition,
+        handleAddState, handleAddTransition, setSelectedNodeId, selectedNodeId,
+        setSelectedTransitionId, selectedTransitionId,
+        handleMoveShape, handleReparent, handleAddGroup,
+        isTimelineVisible, setIsTimelineVisible, isPlaying, setIsPlaying, currentTime, setCurrentTime,
+        duration, setDuration, keyframes, addKeyframe, deleteKeyframe,
+        activeAnimationId, setActiveAnimationId, addAnimation
+    };
+
+    // Component Map for Layout - NOW STABLE
     const componentMap = useMemo(() => ({
-        Hierarchy: () => (
-            <Hierarchy
-                shapes={shapes}
-                selection={selection}
-                setSelection={setSelection}
-                onMoveShape={handleMoveShape}
-                onReparent={handleReparent}
-                onAddGroup={handleAddGroup}
-            />
-        ),
-        Properties: () => (
-            <Properties
-                selection={selection}
-                shapes={shapes}
-                updateShapes={updateShapes}
-                canvasSize={canvasSize}
-                updateShape={updateShape}
-            />
-        ),
-        Timeline: () => (
-            <Timeline
-                isVisible={isTimelineVisible}
-                onToggle={() => setIsTimelineVisible(!isTimelineVisible)}
-                isPlaying={isPlaying}
-                setIsPlaying={setIsPlaying}
-                currentTime={currentTime}
-                setCurrentTime={setCurrentTime}
-                duration={duration}
-                setDuration={setDuration}
-                shapes={shapes}
-                selection={selection}
-                keyframes={keyframes}
-                addKeyframe={addKeyframe}
-                deleteKeyframe={deleteKeyframe}
-                animations={animations}
-                activeAnimationId={activeAnimationId}
-                setActiveAnimationId={setActiveAnimationId}
-                addAnimation={addAnimation}
-                // State Machine Props
-                smInputs={smInputs}
-                setSmInputs={setSmInputs}
-                selectedTransition={smTransitions.find(t => t.id === selectedTransitionId)}
-                onUpdateTransition={handleUpdateTransition}
-            />
-        ),
-        Canvas: () => (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                {/* View Switcher (Only in Animate Mode) */}
-                {mode === 'animate' && (
-                    <div style={{
-                        height: '32px',
-                        background: 'var(--bg-panel)',
-                        borderBottom: '1px solid var(--border-color)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '0 8px',
-                        gap: '8px'
-                    }}>
-                        <button
-                            className={`btn ${activeView === 'canvas' ? 'active' : ''}`}
-                            onClick={() => setActiveView('canvas')}
-                            style={{ fontSize: '11px', padding: '4px 8px', background: activeView === 'canvas' ? 'var(--bg-input)' : 'transparent' }}
-                        >
-                            Canvas
-                        </button>
-                        <button
-                            className={`btn ${activeView === 'graph' ? 'active' : ''}`}
-                            onClick={() => setActiveView('graph')}
-                            style={{ fontSize: '11px', padding: '4px 8px', background: activeView === 'graph' ? 'var(--bg-input)' : 'transparent' }}
-                        >
-                            State Machine
-                        </button>
-                    </div>
-                )}
-
-                <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-                    {/* Canvas View */}
-                    <div style={{
-                        position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                        visibility: activeView === 'canvas' ? 'visible' : 'hidden'
-                    }}>
-                        <Canvas
-                            shapes={shapes}
-                            selection={selection}
-                            setSelection={setSelection}
-                            tool={tool}
-                            addShape={addShape}
-                            updateShape={updateShape}
-                            updateShapes={updateShapes}
-                            onUpdateEnd={() => recordHistory(shapes, animations)}
-                            canvasSize={canvasSize}
-                            setCanvasSize={setCanvasSize}
-                            mode={mode}
-                        />
-                    </div>
-
-                    {/* State Machine View */}
-                    {mode === 'animate' && activeView === 'graph' && (
-                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-                            <StateMachineEditor
-                                states={smStates}
-                                transitions={smTransitions}
-                                onAddState={handleAddState}
-                                onAddTransition={handleAddTransition}
-                                onSelectNode={setSelectedNodeId}
-                                selectedNodeId={selectedNodeId}
-                                onSelectTransition={setSelectedTransitionId}
-                                selectedTransitionId={selectedTransitionId}
-                            />
-                        </div>
-                    )}
-                </div>
-            </div>
-        )
-    }), [shapes, selection, tool, mode, isPlaying, currentTime, animations, activeAnimationId, canvasSize, isTimelineVisible, activeView, smStates, smTransitions, smInputs, currentStateId, selectedTransitionId, selectedNodeId]);
+        Hierarchy: HierarchyWrapper,
+        Properties: PropertiesWrapper,
+        Timeline: TimelineWrapper,
+        Canvas: CanvasWrapper
+    }), []);
 
     return (
-        <div className="app-container">
-            <div className="header">
-                <div className="logo">
-                    <Icons.Box />
-                    <span>RIVE Clone</span>
+        <AppContext.Provider value={contextValue}>
+            <div className="app-container">
+                <div className="header">
+                    <div className="logo">
+                        <Icons.Box />
+                        <span>RIVE Clone</span>
+                    </div>
+
+                    {/* Toolbar (Design Mode) - Design tools */}
+                    {mode === 'design' && (
+                        <Toolbar
+                            activeTool={tool}
+                            setTool={setTool}
+                            onImportImage={handleImportImage}
+                            onImportSVG={handleImportSVG}
+                        />
+                    )}
+
+                    <div className="mode-switcher">
+                        <div
+                            className={`mode-btn ${mode === 'design' ? 'active' : ''}`}
+                            onClick={() => {
+                                setMode('design');
+                                setIsTimelineVisible(false);
+                                setIsPlaying(false);
+                                setActiveView('canvas');
+                            }}
+                        >
+                            Design
+                        </div>
+                        <div
+                            className={`mode-btn ${mode === 'animate' ? 'active' : ''}`}
+                            onClick={() => {
+                                setMode('animate');
+                                setIsTimelineVisible(true);
+                            }}
+                        >
+                            Animate
+                        </div>
+                    </div>
+
+                    <div className="actions">
+                        <button className="btn" onClick={handleExport}>
+                            <Icons.Download size={14} />
+                            Export
+                        </button>
+                        <button className="btn primary">
+                            <Icons.Play size={14} />
+                            Preview
+                        </button>
+                    </div>
                 </div>
 
-                {/* Toolbar (Design Mode) - Design tools */}
-                {mode === 'design' && (
-                    <Toolbar
-                        activeTool={tool}
-                        setTool={setTool}
-                        onImportImage={handleImportImage}
-                        onImportSVG={handleImportSVG}
+                <div className="menu-bar">
+                    <MenuBar
+                        onNew={handleNew}
+                        onOpen={handleOpen}
+                        onExport={handleExport}
+                        onUndo={undo}
+                        onRedo={redo}
+                        canvasSize={canvasSize}
+                        setCanvasSize={setCanvasSize}
                     />
-                )}
-
-                <div className="mode-switcher">
-                    <div
-                        className={`mode-btn ${mode === 'design' ? 'active' : ''}`}
-                        onClick={() => {
-                            setMode('design');
-                            setIsTimelineVisible(false);
-                            setIsPlaying(false);
-                            setActiveView('canvas');
-                        }}
-                    >
-                        Design
-                    </div>
-                    <div
-                        className={`mode-btn ${mode === 'animate' ? 'active' : ''}`}
-                        onClick={() => {
-                            setMode('animate');
-                            setIsTimelineVisible(true);
-                        }}
-                    >
-                        Animate
-                    </div>
+                    <input type="file" ref={fileInputRef} onChange={handleFileImport} style={{ display: 'none' }} accept=".json" />
                 </div>
 
-                <div className="actions">
-                    <button className="btn" onClick={handleExport}>
-                        <Icons.Download size={14} />
-                        Export
-                    </button>
-                    <button className="btn primary">
-                        <Icons.Play size={14} />
-                        Preview
-                    </button>
-                </div>
+                <Layout layout={layout} componentMap={componentMap} onLayoutChange={handleLayoutChange} />
             </div>
-
-            <div className="menu-bar">
-                <MenuBar
-                    onNew={handleNew}
-                    onOpen={handleOpen}
-                    onExport={handleExport}
-                    onUndo={undo}
-                    onRedo={redo}
-                    canvasSize={canvasSize}
-                    setCanvasSize={setCanvasSize}
-                />
-                <input type="file" ref={fileInputRef} onChange={handleFileImport} style={{ display: 'none' }} accept=".json" />
-            </div>
-
-            <Layout layout={layout} componentMap={componentMap} onLayoutChange={handleLayoutChange} />
-        </div>
+        </AppContext.Provider>
     );
 };
 
