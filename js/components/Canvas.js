@@ -988,9 +988,51 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         );
     };
 
-    const renderShapeRecursiveWithSelection = (shape) => {
+    const renderShapeMask = (shape) => {
+        const transform = `translate(${shape.x}, ${shape.y}) rotate(${shape.rotation || 0} ${(shape.width || 0) / 2} ${(shape.height || 0) / 2}) scale(${shape.scaleX || 1}, ${shape.scaleY || 1})`;
+
+        return (
+            <g transform={transform}>
+                {shape.type === 'rect' && (() => {
+                    const w = shape.width;
+                    const h = shape.height;
+                    const rTL = Math.min(shape.cornerRadiusTL ?? shape.cornerRadius ?? 0, w / 2, h / 2);
+                    const rTR = Math.min(shape.cornerRadiusTR ?? shape.cornerRadius ?? 0, w / 2, h / 2);
+                    const rBR = Math.min(shape.cornerRadiusBR ?? shape.cornerRadius ?? 0, w / 2, h / 2);
+                    const rBL = Math.min(shape.cornerRadiusBL ?? shape.cornerRadius ?? 0, w / 2, h / 2);
+                    const hasIndividualCorners = shape.cornerRadiusTL !== undefined || shape.cornerRadiusTR !== undefined || shape.cornerRadiusBR !== undefined || shape.cornerRadiusBL !== undefined;
+
+                    if (!hasIndividualCorners) {
+                        return <rect width={w} height={h} rx={shape.cornerRadius || 0} ry={shape.cornerRadius || 0} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} />;
+                    }
+
+                    const pathData = `
+                        M ${rTL} 0
+                        L ${w - rTR} 0
+                        ${rTR > 0 ? `Q ${w} 0 ${w} ${rTR}` : ''}
+                        L ${w} ${h - rBR}
+                        ${rBR > 0 ? `Q ${w} ${h} ${w - rBR} ${h}` : ''}
+                        L ${rBL} ${h}
+                        ${rBL > 0 ? `Q 0 ${h} 0 ${h - rBL}` : ''}
+                        L 0 ${rTL}
+                        ${rTL > 0 ? `Q 0 0 ${rTL} 0` : ''}
+                        Z
+                    `.replace(/\s+/g, ' ').trim();
+                    return <path d={pathData} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} />;
+                })()}
+                {shape.type === 'ellipse' && <ellipse cx={shape.width / 2} cy={shape.height / 2} rx={shape.width / 2} ry={shape.height / 2} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} />}
+                {shape.type === 'path' && <path d={shape.pathData} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} />}
+                {shape.type === 'image' && <image href={shape.imageData} width={shape.width} height={shape.height} opacity={shape.opacity} />}
+            </g>
+        );
+    };
+
+    const renderShapeRecursiveWithSelection = (shape, maskShape = null) => {
         const isSelected = selection.includes(shape.id);
         const rotation = shape.rotation || 0;
+
+        // If this shape is marked as a mask, don't render it directly
+        if (shape.isMask) return null;
 
         const transform = `translate(${shape.x}, ${shape.y}) rotate(${rotation} ${(shape.width || 0) / 2} ${(shape.height || 0) / 2}) scale(${shape.scaleX || 1}, ${shape.scaleY || 1})`;
 
@@ -1003,6 +1045,9 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 </g>
             );
         }
+
+        // Determine which mask to use (passed from parent or none)
+        const maskId = maskShape ? `mask-${maskShape.id}` : null;
 
         return (
             <g key={shape.id} transform={transform}>
@@ -1017,6 +1062,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
 
                     if (!hasIndividualCorners) {
                         // Use simple rect with uniform corner radius
+                        // Use simple rect with uniform corner radius
                         return <rect
                             width={shape.width}
                             height={shape.height}
@@ -1027,6 +1073,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                             strokeWidth={shape.strokeWidth}
                             opacity={shape.opacity}
                             filter={getShapeFilter(shape)}
+
                             style={{ mixBlendMode: shape.blendMode }}
                             onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
                             onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)}
@@ -1061,6 +1108,7 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                         strokeWidth={shape.strokeWidth}
                         opacity={shape.opacity}
                         filter={getShapeFilter(shape)}
+                        mask={maskId ? `url(#${maskId})` : undefined}
                         style={{ mixBlendMode: shape.blendMode }}
                         onMouseDown={(e) => handleShapeMouseDown(e, shape.id)}
                         onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)}
@@ -1072,7 +1120,20 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 {shape.type === 'group' && <rect width={50} height={50} fill="none" stroke={isSelected ? "#6366f1" : "none"} strokeDasharray="2 2" onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} />}
 
                 {/* Children */}
-                {shape.children && shape.children.map(child => renderShapeRecursiveWithSelection(child))}
+                {shape.children && (() => {
+                    // Find mask shape among children (first child with isMask: true)
+                    const maskChild = shape.children.find(c => c.isMask);
+
+                    // Render non-mask children
+                    return shape.children.map(child => {
+                        if (child.isMask) {
+                            // Don't render mask children directly
+                            return null;
+                        }
+                        // Pass the mask to siblings
+                        return renderShapeRecursiveWithSelection(child, maskChild);
+                    });
+                })()}
 
                 {/* Path Editing Points with Bezier Handles */}
                 {isSelected && isEditingPath && (shape.type === 'path' || (isEditingPath && selection.includes(shape.id))) && (
@@ -1232,6 +1293,19 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
 
                             return filters;
                         })}
+
+                        {/* Mask Definitions */}
+                        {shapes.filter(s => s.isMask).map(maskShape => (
+                            <mask
+                                key={`mask-${maskShape.id}`}
+                                id={`mask-${maskShape.id}`}
+                                maskUnits="userSpaceOnUse"
+                                maskContentUnits="userSpaceOnUse"
+                                x="0" y="0" width={canvasSize.width} height={canvasSize.height}
+                            >
+                                {renderShapeMask(maskShape)}
+                            </mask>
+                        ))}
                     </defs>
                     {tree.map(root => renderShapeRecursiveWithSelection(root))}
 

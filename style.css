@@ -247,9 +247,7 @@ body {
     flex-direction: column;
 }
 
-.left-panel {
-    /* grid-area: left-panel; */
-}
+
 
 .right-panel {
     /* grid-area: right-panel; */
