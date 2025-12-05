@@ -141,6 +141,24 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         };
     };
 
+    // Helper to get all descendants recursively
+    const getDescendants = (shapeId, currentShapes) => {
+        const children = currentShapes.filter(s => s.parentId === shapeId);
+        let descendants = [...children];
+        children.forEach(child => {
+            descendants = [...descendants, ...getDescendants(child.id, currentShapes)];
+        });
+        return descendants;
+    };
+
+    // Helper to get effective roots (selected items whose parents are not in the selection)
+    const getEffectiveRoots = (selectedIds, currentShapes) => {
+        return selectedIds.filter(id => {
+            const shape = currentShapes.find(s => s.id === id);
+            return !shape || !shape.parentId || !selectedIds.includes(shape.parentId);
+        });
+    };
+
     // Build tree for rendering
     const buildTree = (items) => {
         const itemMap = {};
@@ -156,6 +174,64 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             }
         });
         return roots;
+    };
+
+    // Helper to find a shape's parent
+    const getParentShape = (shapeId) => {
+        const shape = shapes.find(s => s.id === shapeId);
+        if (!shape || !shape.parentId) return null;
+        return shapes.find(s => s.id === shape.parentId);
+    };
+
+    // Calculate world position (absolute position considering all parent transforms)
+    const getWorldTransform = (shape) => {
+        if (!shape.parentId) {
+            return {
+                x: shape.x,
+                y: shape.y,
+                rotation: shape.rotation || 0,
+                scaleX: shape.scaleX || 1,
+                scaleY: shape.scaleY || 1
+            };
+        }
+
+        const parent = getParentShape(shape.id);
+        if (!parent) {
+            return {
+                x: shape.x,
+                y: shape.y,
+                rotation: shape.rotation || 0,
+                scaleX: shape.scaleX || 1,
+                scaleY: shape.scaleY || 1
+            };
+        }
+
+        const parentWorld = getWorldTransform(parent);
+
+        // Calculate child's world position relative to parent
+        // Child position is offset from parent, then rotated and scaled  
+        const parentCenterX = parentWorld.x + (parent.width || 0) / 2;
+        const parentCenterY = parentWorld.y + (parent.height || 0) / 2;
+
+        // Child's local offset fromparent
+        const localX = shape.x - parent.x;
+        const localY = shape.y - parent.y;
+
+        // Apply parent rotation to offset
+        const angleRad = (parentWorld.rotation * Math.PI) / 180;
+        const cos = Math.cos(angleRad);
+        const sin = Math.sin(angleRad);
+
+        const rotatedX = localX * cos - localY * sin;
+        const rotatedY = localX * sin + localY * cos;
+
+        return {
+            x: parentWorld.x + (rotatedX * parentWorld.scaleX),
+            y: parentWorld.y + (rotatedY * parentWorld.scaleY),
+            rotation: parentWorld.rotation + (shape.rotation || 0),
+            scaleX: parentWorld.scaleX * (shape.scaleX || 1),
+            scaleY: parentWorld.scaleY * (shape.scaleY || 1)
+        };
     };
 
     const finishPath = (closed = false) => {
@@ -303,7 +379,17 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         const currentSelection = e.shiftKey ? newSelection : (newSelection.includes(shapeId) ? newSelection : [shapeId]);
 
         const initialPositions = {};
-        currentSelection.forEach(id => {
+
+        // Identify roots and descendants to include all affected shapes
+        const roots = getEffectiveRoots(currentSelection, shapes);
+        const shapesToTrack = new Set(currentSelection);
+
+        roots.forEach(rootId => {
+            const descendants = getDescendants(rootId, shapes);
+            descendants.forEach(d => shapesToTrack.add(d.id));
+        });
+
+        shapesToTrack.forEach(id => {
             const s = shapes.find(item => item.id === id);
             if (s) {
                 initialPositions[id] = { x: s.x, y: s.y };
@@ -387,10 +473,19 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         const coords = getCanvasCoords(e);
         setDragStart(coords);
 
-        // Store initial bounds and shapes for multi-selection
+        // Store initial bounds and shapes for multi-selection and descendants
         const bounds = calculateMultiSelectionBounds();
         const initialShapes = {};
-        selection.forEach(id => {
+
+        const roots = getEffectiveRoots(selection, shapes);
+        const shapesToTrack = new Set(selection);
+
+        roots.forEach(rootId => {
+            const descendants = getDescendants(rootId, shapes);
+            descendants.forEach(d => shapesToTrack.add(d.id));
+        });
+
+        shapesToTrack.forEach(id => {
             const shape = shapes.find(s => s.id === id);
             if (shape) {
                 initialShapes[id] = { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
@@ -405,10 +500,19 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         const coords = getCanvasCoords(e);
         setDragStart(coords);
 
-        // Store initial bounds and shapes for multi-selection
+        // Store initial bounds and shapes for multi-selection and descendants
         const bounds = calculateMultiSelectionBounds();
         const initialShapes = {};
-        selection.forEach(id => {
+
+        const roots = getEffectiveRoots(selection, shapes);
+        const shapesToTrack = new Set(selection);
+
+        roots.forEach(rootId => {
+            const descendants = getDescendants(rootId, shapes);
+            descendants.forEach(d => shapesToTrack.add(d.id));
+        });
+
+        shapesToTrack.forEach(id => {
             const shape = shapes.find(s => s.id === id);
             if (shape) {
                 initialShapes[id] = {
@@ -594,9 +698,10 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             const snappedDx = snapped.x - leaderInitial.x;
             const snappedDy = snapped.y - leaderInitial.y;
 
-            // Apply this snapped delta to ALL selected shapes
+            // Apply this snapped delta to ALL tracked shapes (selection + descendants)
             const updates = [];
-            selection.forEach(id => {
+            Object.keys(dragInfo.initialPositions).forEach(key => {
+                const id = parseInt(key);
                 const initial = dragInfo.initialPositions[id];
                 if (initial) {
                     updates.push({
@@ -646,9 +751,10 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 const scaleX = newBounds.width / bounds.width;
                 const scaleY = newBounds.height / bounds.height;
 
-                // Apply to all selected shapes
+                // Apply to all tracked shapes
                 const updates = [];
-                selection.forEach(id => {
+                Object.keys(initialShapes).forEach(key => {
+                    const id = parseInt(key);
                     const initial = initialShapes[id];
                     if (initial) {
                         // Calculate relative position within original bounds
@@ -687,9 +793,10 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
             const startAngle = Math.atan2(dragStart.y - centerY, dragStart.x - centerX) * (180 / Math.PI);
             const rotationDelta = finalAngle - startAngle;
 
-            // Apply rotation to all selected shapes
+            // Apply rotation to all tracked shapes
             const updates = [];
-            selection.forEach(id => {
+            Object.keys(initialShapes).forEach(key => {
+                const id = parseInt(key);
                 const initial = initialShapes[id];
                 if (initial) {
                     // Rotate shape's center around group center
@@ -1027,21 +1134,67 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
         );
     };
 
-    const renderShapeRecursiveWithSelection = (shape, maskShape = null) => {
+    const renderShapeRecursiveWithSelection = (shape, maskShape = null, parentShape = null) => {
         const isSelected = selection.includes(shape.id);
         const rotation = shape.rotation || 0;
 
         // If this shape is marked as a mask, don't render it directly
         if (shape.isMask) return null;
 
-        const transform = `translate(${shape.x}, ${shape.y}) rotate(${rotation} ${(shape.width || 0) / 2} ${(shape.height || 0) / 2}) scale(${shape.scaleX || 1}, ${shape.scaleY || 1})`;
+        // Calculate local transform relative to parent
+        let localX = shape.x;
+        let localY = shape.y;
+        let localRotation = rotation;
+        let localScaleX = shape.scaleX || 1;
+        let localScaleY = shape.scaleY || 1;
+
+        if (parentShape) {
+            // 1. Undo Parent Translation
+            const dx = shape.x - parentShape.x;
+            const dy = shape.y - parentShape.y;
+
+            // 2. Undo Parent Rotation
+            // Rotate the relative vector by -parentRotation around parent's center
+            const pCx = (parentShape.width || 0) / 2;
+            const pCy = (parentShape.height || 0) / 2;
+
+            // Vector from parent center to child position
+            const vX = dx - pCx;
+            const vY = dy - pCy;
+
+            const pRotRad = -((parentShape.rotation || 0) * (Math.PI / 180));
+            const cos = Math.cos(pRotRad);
+            const sin = Math.sin(pRotRad);
+
+            // Rotate vector
+            const rotX = vX * cos - vY * sin;
+            const rotY = vX * sin + vY * cos;
+
+            // Move back relative to parent top-left
+            const unscaledX = rotX + pCx;
+            const unscaledY = rotY + pCy;
+
+            // 3. Undo Parent Scale
+            // Scale is applied after rotation in our SVG transform order (Translate -> Rotate -> Scale)
+            // So we divide by scale last
+            localX = unscaledX / (parentShape.scaleX || 1);
+            localY = unscaledY / (parentShape.scaleY || 1);
+
+            // Adjust Rotation and Scale
+            localRotation = (shape.rotation || 0) - (parentShape.rotation || 0);
+            localScaleX = (shape.scaleX || 1) / (parentShape.scaleX || 1);
+            localScaleY = (shape.scaleY || 1) / (parentShape.scaleY || 1);
+        }
+
+        // Use calculated local transforms
+        const transform = `translate(${localX}, ${localY}) rotate(${localRotation} ${(shape.width || 0) / 2} ${(shape.height || 0) / 2}) scale(${localScaleX}, ${localScaleY})`;
 
         // Skip rendering glass shapes in SVG - they're rendered as HTML overlays
         if (shape.glassEffect) {
             return (
                 <g key={shape.id} transform={transform}>
                     {/* Children still need to render */}
-                    {shape.children && shape.children.map(child => renderShapeRecursiveWithSelection(child))}
+                    {shape.children && shape.children.map(child => renderShapeRecursiveWithSelection(child, null, shape))}
                 </g>
             );
         }
@@ -1117,7 +1270,10 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                 {shape.type === 'ellipse' && <ellipse cx={shape.width / 2} cy={shape.height / 2} rx={shape.width / 2} ry={shape.height / 2} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} filter={getShapeFilter(shape)} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
                 {shape.type === 'path' && <path d={shape.pathData} fill={shape.fill} stroke={shape.stroke} strokeWidth={shape.strokeWidth} opacity={shape.opacity} filter={getShapeFilter(shape)} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
                 {shape.type === 'image' && <image href={shape.imageData} width={shape.width} height={shape.height} opacity={shape.opacity} filter={getShapeFilter(shape)} style={{ mixBlendMode: shape.blendMode }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} onDoubleClick={(e) => handleShapeDoubleClick(e, shape.id)} />}
-                {shape.type === 'group' && <rect width={50} height={50} fill="none" stroke={isSelected ? "#6366f1" : "none"} strokeDasharray="2 2" onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} />}
+                {/* Group/Null - Invisible container with transparent hit area */}
+                {shape.type === 'group' && <rect width={50} height={50} fill="transparent" stroke="none" opacity={0} style={{ pointerEvents: 'auto' }} onMouseDown={(e) => handleShapeMouseDown(e, shape.id)} />}
+                {/* Show selection indicator for groups when selected */}
+                {shape.type === 'group' && isSelected && <rect width={50} height={50} fill="none" stroke="#6366f1" strokeWidth="1.5" strokeDasharray="4 2" opacity="0.5" pointerEvents="none" />}
 
                 {/* Children */}
                 {shape.children && (() => {
@@ -1130,8 +1286,8 @@ const Canvas = ({ shapes, selection, setSelection, tool, addShape, updateShape, 
                             // Don't render mask children directly
                             return null;
                         }
-                        // Pass the mask to siblings
-                        return renderShapeRecursiveWithSelection(child, maskChild);
+                        // Pass the mask to siblings and parent shape ref
+                        return renderShapeRecursiveWithSelection(child, maskChild, shape);
                     });
                 })()}
 

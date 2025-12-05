@@ -1,6 +1,6 @@
 const React = window.React;
 const Icons = window.Icons;
-const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG }) => {
+const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG, onDistributeHorizontal, onDistributeVertical, selection }) => {
     const fileInputRef = React.useRef(null);
     const svgInputRef = React.useRef(null);
 
@@ -11,6 +11,8 @@ const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG }) => {
         { id: 'pen', icon: Icons.Pen },
         { id: 'artboard', icon: Icons.Artboard },
     ];
+
+    const showDistribution = selection && selection.length >= 3;
 
     return (
         <div className="toolbar">
@@ -39,6 +41,28 @@ const Toolbar = ({ activeTool, setTool, onImportImage, onImportSVG }) => {
             >
                 <Icons.Upload />
             </div>
+
+            {/* Distribution Tools - Only show when 3+ items selected */}
+            {showDistribution && (
+                <>
+                    <div style={{ width: '1px', height: '24px', background: 'var(--border-color)', margin: '0 8px' }}></div>
+                    <div
+                        className="tool-btn"
+                        onClick={onDistributeHorizontal}
+                        title="Distribute Horizontally"
+                    >
+                        <Icons.DistributeHorizontal />
+                    </div>
+                    <div
+                        className="tool-btn"
+                        onClick={onDistributeVertical}
+                        title="Distribute Vertically"
+                    >
+                        <Icons.DistributeVertical />
+                    </div>
+                </>
+            )}
+
             <input
                 ref={fileInputRef}
                 type="file"

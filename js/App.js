@@ -406,6 +406,12 @@ const App = () => {
         };
     }, [shapes, selection, clipboard, history, historyIndex, mode, currentTime]);
 
+    // Refs for Animation Loop
+    const shapesRef = useRef(shapes);
+    useEffect(() => {
+        shapesRef.current = shapes;
+    }, [shapes]);
+
     // Animation Loop
     useEffect(() => {
         let animationFrame;
@@ -457,8 +463,10 @@ const App = () => {
 
             // Interpolate shapes based on keyframes of CURRENT animation
             const currentKeyframes = currentAnim.keyframes || [];
+            const updates = [];
+            const currentShapes = shapesRef.current;
 
-            shapes.forEach(shape => {
+            currentShapes.forEach(shape => {
                 const shapeKeyframes = currentKeyframes
                     .filter(kf => kf.shapeId === shape.id)
                     .sort((a, b) => a.time - b.time);
@@ -478,7 +486,7 @@ const App = () => {
                     if (prevKf && nextKf) {
                         let progress = (newTime - prevKf.time) / (nextKf.time - prevKf.time);
                         const type = prevKf.interpolation || 'linear';
-                        if (Easing[type]) {
+                        if (type && Easing[type]) {
                             progress = Easing[type](progress);
                         }
 
@@ -488,10 +496,14 @@ const App = () => {
                                 (nextKf.properties[key] - prevKf.properties[key]) * progress;
                         });
 
-                        updateShape(shape.id, interpolated);
+                        updates.push({ id: shape.id, props: interpolated });
                     }
                 }
             });
+
+            if (updates.length > 0) {
+                updateShapes(updates);
+            }
 
             animationFrame = requestAnimationFrame(loop);
         };
@@ -504,7 +516,7 @@ const App = () => {
         }
 
         return () => cancelAnimationFrame(animationFrame);
-    }, [isPlaying, keyframes, duration, shapes, smStates, smTransitions, smInputs, currentStateId]);
+    }, [isPlaying, keyframes, duration, smStates, smTransitions, smInputs, currentStateId]);
 
     const addShape = (shape) => {
         const newShape = { ...shape, id: Date.now() };
@@ -583,9 +595,11 @@ const App = () => {
         const newGroup = {
             id: Date.now(),
             type: 'group',
-            name: `Group ${shapes.length + 1}`,
+            name: `Null ${shapes.length + 1}`,
             x: canvasSize.width / 2,
             y: canvasSize.height / 2,
+            width: 50,
+            height: 50,
             rotation: 0,
             scaleX: 1,
             scaleY: 1,
@@ -593,6 +607,106 @@ const App = () => {
             visible: true
         };
         addShape(newGroup);
+    };
+
+    const handleDistributeHorizontal = () => {
+        if (selection.length < 3) return; // Need at least 3 objects to distribute
+
+        const selectedShapes = shapes.filter(s => selection.includes(s.id));
+
+        // Sort by x position (left to right)
+        const sorted = [...selectedShapes].sort((a, b) => a.x - b.x);
+
+        // Calculate total space between leftmost and rightmost shapes
+        const leftmost = sorted[0];
+        const rightmost = sorted[sorted.length - 1];
+
+        const leftEdge = leftmost.x;
+        const rightEdge = rightmost.x + (rightmost.width || 0);
+        const totalWidth = rightEdge - leftEdge;
+
+        // Calculate total width of all shapes
+        const shapesWidth = sorted.reduce((sum, shape) => sum + (shape.width || 0), 0);
+
+        // Calculate spacing between shapes
+        const spacing = (totalWidth - shapesWidth) / (sorted.length - 1);
+
+        // Update positions
+        const updates = [];
+        let currentX = leftEdge;
+
+        sorted.forEach((shape, index) => {
+            if (index === 0 || index === sorted.length - 1) {
+                // Don't move the first and last shapes
+                currentX += (shape.width || 0) + spacing;
+                return;
+            }
+
+            updates.push({
+                id: shape.id,
+                props: { x: currentX }
+            });
+
+            currentX += (shape.width || 0) + spacing;
+        });
+
+        if (updates.length > 0) {
+            updateShapes(updates);
+            recordHistory(shapes.map(s => {
+                const update = updates.find(u => u.id === s.id);
+                return update ? { ...s, ...update.props } : s;
+            }), animations);
+        }
+    };
+
+    const handleDistributeVertical = () => {
+        if (selection.length < 3) return; // Need at least 3 objects to distribute
+
+        const selectedShapes = shapes.filter(s => selection.includes(s.id));
+
+        // Sort by y position (top to bottom)
+        const sorted = [...selectedShapes].sort((a, b) => a.y - b.y);
+
+        // Calculate total space between topmost and bottommost shapes
+        const topmost = sorted[0];
+        const bottommost = sorted[sorted.length - 1];
+
+        const topEdge = topmost.y;
+        const bottomEdge = bottommost.y + (bottommost.height || 0);
+        const totalHeight = bottomEdge - topEdge;
+
+        // Calculate total height of all shapes
+        const shapesHeight = sorted.reduce((sum, shape) => sum + (shape.height || 0), 0);
+
+        // Calculate spacing between shapes
+        const spacing = (totalHeight - shapesHeight) / (sorted.length - 1);
+
+        // Update positions
+        const updates = [];
+        let currentY = topEdge;
+
+        sorted.forEach((shape, index) => {
+            if (index === 0 || index === sorted.length - 1) {
+                // Don't move the first and last shapes
+                currentY += (shape.height || 0) + spacing;
+                return;
+            }
+
+            updates.push({
+                id: shape.id,
+                props: { y: currentY }
+            });
+
+            currentY += (shape.height || 0) + spacing;
+        });
+
+        if (updates.length > 0) {
+            updateShapes(updates);
+            recordHistory(shapes.map(s => {
+                const update = updates.find(u => u.id === s.id);
+                return update ? { ...s, ...update.props } : s;
+            }), animations);
+        }
     };
 
     const addKeyframe = (keyframe) => {
@@ -767,6 +881,7 @@ const App = () => {
         handleAddState, handleAddTransition, setSelectedNodeId, selectedNodeId,
         setSelectedTransitionId, selectedTransitionId,
         handleMoveShape, handleReparent, handleAddGroup,
+        handleDistributeHorizontal, handleDistributeVertical,
         isTimelineVisible, setIsTimelineVisible, isPlaying, setIsPlaying, currentTime, setCurrentTime,
         duration, setDuration, keyframes, addKeyframe, deleteKeyframe,
         activeAnimationId, setActiveAnimationId, addAnimation
@@ -796,6 +911,9 @@ const App = () => {
                             setTool={setTool}
                             onImportImage={handleImportImage}
                             onImportSVG={handleImportSVG}
+                            onDistributeHorizontal={handleDistributeHorizontal}
+                            onDistributeVertical={handleDistributeVertical}
+                            selection={selection}
                         />
                     )}
 
