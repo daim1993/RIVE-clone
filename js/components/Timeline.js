@@ -1,6 +1,7 @@
 const React = window.React;
 const Icons = window.Icons;
 const InterpolationPanel = window.InterpolationPanel;
+const Select = window.Select;
 
 // --- Sub-components ---
 
@@ -18,73 +19,64 @@ const TimelineHeader = React.memo(({
     };
 
     return (
-        <div className="timeline-header" style={{ height: '32px', flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', borderRight: '1px solid var(--border-color)', paddingRight: '8px', marginRight: '8px' }}>
-                    <select
+        <div className="timeline-header">
+            <div className="timeline-controls">
+                <div style={{ display: 'flex', alignItems: 'center', borderRight: '1px solid var(--border-color)', paddingRight: '12px', marginRight: '4px' }}>
+                    <Select
                         value={activeAnimationId}
-                        onChange={(e) => setActiveAnimationId(Number(e.target.value))}
-                        style={{
-                            background: 'transparent',
-                            color: 'var(--text-primary)',
-                            border: 'none',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            outline: 'none',
-                            cursor: 'pointer',
-                            maxWidth: '120px'
-                        }}
-                    >
-                        {animations.map(anim => (
-                            <option key={anim.id} value={anim.id}>{anim.name}</option>
-                        ))}
-                    </select>
-                    <button className="btn" onClick={addAnimation} style={{ padding: '2px', marginLeft: '4px', border: 'none' }} title="New Animation">
-                        <Icons.Plus />
+                        onChange={(val) => setActiveAnimationId(Number(val))}
+                        options={animations.map(anim => ({ value: anim.id, label: anim.name }))}
+                        style={{ minWidth: '140px' }}
+                    />
+                    <button className="btn" onClick={addAnimation} style={{ padding: '4px', marginLeft: '6px' }} title="New Animation">
+                        <Icons.Plus size={14} />
                     </button>
                 </div>
-                <button className="btn" onClick={() => setIsPlaying(!isPlaying)} style={{ padding: '4px 8px' }}>
-                    {isPlaying ? <Icons.Pause /> : <Icons.Play />}
+
+                <button className={`btn ${isPlaying ? 'active' : ''}`} onClick={() => setIsPlaying(!isPlaying)} style={{ padding: '6px 10px' }} title={isPlaying ? "Pause (Space)" : "Play (Space)"}>
+                    {isPlaying ? <Icons.Pause size={14} fill="currentColor" /> : <Icons.Play size={14} fill="currentColor" />}
                 </button>
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                    {formatTime(currentTime)} / {formatTime(duration)}
-                </span>
-                <input
-                    type="number"
-                    value={duration}
-                    onChange={(e) => setDuration(Number(e.target.value))}
-                    style={{
-                        background: 'transparent',
-                        border: '1px solid var(--border-color)',
-                        color: 'var(--text-primary)',
-                        padding: '2px 6px',
-                        borderRadius: '3px',
-                        fontSize: '11px',
-                        width: '60px'
-                    }}
-                />
+
+                <div className="timeline-time-display">
+                    {formatTime(currentTime)}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    <span>Duration:</span>
+                    <input
+                        className="duration-input"
+                        type="number"
+                        value={duration}
+                        onChange={(e) => setDuration(Number(e.target.value))}
+                    />
+                    <span>ms</span>
+                </div>
             </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+
+            <div className="timeline-controls">
                 {hasSelection && (
                     <button className="btn" onClick={handleAddKeyframe} title="Add Keyframe (K)">
-                        <Icons.Plus /> Keyframe
+                        <Icons.Diamond size={14} style={{ marginRight: '4px' }} /> Keyframe
                     </button>
                 )}
-                <button className="btn" onClick={onToggle} title="Collapse Timeline" style={{ padding: '4px 8px' }}>
-                    <Icons.ChevronDown />
+                <button className="btn" onClick={onToggle} title="Collapse Timeline" style={{ padding: '6px' }}>
+                    <Icons.ChevronDown size={16} />
                 </button>
             </div>
         </div>
     );
 });
 
-const TimelineRuler = React.memo(({ duration, handleTimelineMouseDown, LABEL_WIDTH, RULER_HEIGHT }) => {
+const TimelineRuler = React.memo(({ duration, handleTimelineMouseDown, LABEL_WIDTH }) => {
     return (
-        <div style={{ height: `${RULER_HEIGHT}px`, borderBottom: '1px solid var(--border-color)', display: 'flex', background: 'var(--bg-panel)' }}>
-            <div style={{ width: `${LABEL_WIDTH}px`, borderRight: '1px solid var(--border-color)', flexShrink: 0 }}></div>
-            <div style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: 'ew-resize' }} onMouseDown={handleTimelineMouseDown}>
+        <div className="timeline-ruler">
+            <div style={{ width: `${LABEL_WIDTH}px`, borderRight: '1px solid var(--border-color)', flexShrink: 0, background: 'var(--bg-panel)' }}>
+                {/* Maybe labels later */}
+            </div>
+            <div className="ruler-ticks" onMouseDown={handleTimelineMouseDown}>
+                {/* Generate simpler ticks based on percentage for responsiveness */}
                 {Array.from({ length: 11 }).map((_, i) => (
-                    <div key={i} style={{ position: 'absolute', left: `${i * 10}%`, top: 0, bottom: 0, borderLeft: '1px solid var(--border-color)', paddingLeft: '4px', fontSize: '9px', color: 'var(--text-secondary)' }}>
+                    <div key={i} className="ruler-tick" style={{ left: `${i * 10}%` }}>
                         {Math.round((i * 10 / 100) * duration)}ms
                     </div>
                 ))}
@@ -93,7 +85,7 @@ const TimelineRuler = React.memo(({ duration, handleTimelineMouseDown, LABEL_WID
     );
 });
 
-const KeyframeNode = React.memo(({ kf, currentTime, duration, isSelected, onClick, deleteKeyframe }) => {
+const KeyframeNode = React.memo(({ kf, currentTime, duration, isSelected, onClick, deleteKeyframe, onMouseDown, showConfirm }) => {
     const percent = (kf.time / duration) * 100;
     // Highlight if within 50ms
     const isActive = Math.abs(kf.time - currentTime) < 50;
@@ -101,14 +93,20 @@ const KeyframeNode = React.memo(({ kf, currentTime, duration, isSelected, onClic
     return (
         <div
             className={`keyframe ${isActive ? 'active' : ''}`}
-            style={{ left: `${percent}%`, border: isSelected ? '2px solid white' : 'none', zIndex: isSelected ? 10 : 1 }}
+            style={{ left: `${percent}%`, border: isSelected ? '2px solid white' : 'none', zIndex: isSelected ? 10 : 1, cursor: 'ew-resize' }}
             onClick={(e) => {
                 e.stopPropagation();
                 onClick(kf);
             }}
+            onMouseDown={(e) => {
+                e.stopPropagation(); // Prevent timeline scrub
+                onMouseDown(e, kf);
+            }}
             onContextMenu={(e) => {
                 e.preventDefault();
-                if (window.confirm('Delete this keyframe?')) {
+                if (showConfirm) {
+                    showConfirm('Delete this keyframe?', () => deleteKeyframe(kf), 'Delete Keyframe');
+                } else if (window.confirm('Delete this keyframe?')) {
                     deleteKeyframe(kf);
                 }
             }}
@@ -117,7 +115,7 @@ const KeyframeNode = React.memo(({ kf, currentTime, duration, isSelected, onClic
 });
 
 
-const TimelineTracks = React.memo(({ selection, shapes, keyframes, currentTime, duration, selectedKeyframe, setCurrentTime, setSelectedKeyframe, deleteKeyframe, LABEL_WIDTH, tracksRef, handleTimelineMouseDown }) => {
+const TimelineTracks = React.memo(({ selection, shapes, keyframes, currentTime, duration, selectedKeyframe, setCurrentTime, setSelectedKeyframe, deleteKeyframe, LABEL_WIDTH, tracksRef, handleTimelineMouseDown, onKeyframeMouseDown, showConfirm }) => {
     // Determine active tracks
     const activeTracks = React.useMemo(() => {
         if (!selection || selection.length === 0) return [];
@@ -125,24 +123,32 @@ const TimelineTracks = React.memo(({ selection, shapes, keyframes, currentTime, 
     }, [selection, shapes]);
 
     return (
-        <div className="timeline-tracks" style={{ flex: 1, overflow: 'auto', display: 'flex' }}>
-            <div style={{ width: `${LABEL_WIDTH}px`, borderRight: '1px solid var(--border-color)', flexShrink: 0, background: 'var(--bg-panel)', zIndex: 2 }}>
+        <div className="timeline-tracks-container">
+            {/* Sidebar with Labels */}
+            <div className="track-sidebar" style={{ width: `${LABEL_WIDTH}px` }}>
                 {activeTracks.map(shape => (
-                    <div key={shape.id} className="track" style={{ height: '32px', display: 'flex', alignItems: 'center', paddingLeft: '12px', borderBottom: '1px solid var(--border-color)' }}>
-                        <div className="track-label" style={{ border: 'none', padding: 0 }}>{shape.name || `Shape ${shape.id}`}</div>
+                    <div key={shape.id} className="track">
+                        <div className="track-label">
+                            <Icons.Box size={12} style={{ marginRight: '8px', opacity: 0.7 }} />
+                            {shape.name || `Shape ${shape.id}`}
+                        </div>
                     </div>
                 ))}
             </div>
-            <div ref={tracksRef} style={{ flex: 1, position: 'relative', minWidth: '0' }} onMouseDown={handleTimelineMouseDown}>
+
+            {/* Tracks Content */}
+            <div className="track-content-area" ref={tracksRef} onMouseDown={handleTimelineMouseDown}>
+                {/* Grid Lines */}
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '100%', pointerEvents: 'none' }}>
                     {Array.from({ length: 11 }).map((_, i) => (
-                        <div key={i} style={{ position: 'absolute', left: `${i * 10}%`, top: 0, bottom: 0, borderLeft: '1px solid var(--border-color)', opacity: 0.3 }} />
+                        <div key={i} style={{ position: 'absolute', left: `${i * 10}%`, top: 0, bottom: 0, borderLeft: '1px solid var(--border-color)', opacity: 0.1 }} />
                     ))}
                 </div>
+
                 {activeTracks.map(shape => {
                     const shapeKeyframes = keyframes.filter(kf => kf.shapeId === shape.id);
                     return (
-                        <div key={shape.id} className="track" style={{ height: '32px', position: 'relative', borderBottom: '1px solid var(--border-color)' }}>
+                        <div key={shape.id} className="track">
                             {shapeKeyframes.map((kf, idx) => (
                                 <KeyframeNode
                                     key={idx}
@@ -155,157 +161,155 @@ const TimelineTracks = React.memo(({ selection, shapes, keyframes, currentTime, 
                                         setSelectedKeyframe(k);
                                     }}
                                     deleteKeyframe={deleteKeyframe}
+                                    onMouseDown={onKeyframeMouseDown}
+                                    showConfirm={showConfirm}
                                 />
                             ))}
                         </div>
                     );
                 })}
-                {/* Playhead Line inside tracks */}
-                <div className="playhead" style={{ left: `${(currentTime / duration) * 100}%`, position: 'absolute', top: 0, bottom: 0, width: '1px', background: 'var(--accent)', pointerEvents: 'none', zIndex: 10 }} />
+
+                {/* Playhead Line */}
+                <div className="playhead" style={{ left: `${(currentTime / duration) * 100}%` }} />
             </div>
         </div>
     );
 });
 
-const StateMachinePanel = React.memo(({ selectedKeyframe, selectedTransition, smInputs, handleAddInput, handleUpdateInput, onUpdateTransition, addKeyframe, keyframes, shapes, selection, currentTime }) => {
+const StateMachinePanel = React.memo(({ selectedKeyframe, selectedTransition, smInputs, handleAddInput, handleUpdateInput, onUpdateTransition, addKeyframe, keyframes, shapes, selection, currentTime, fireTrigger }) => {
     const GraphEditor = window.GraphEditor;
-    const [viewMode, setViewMode] = React.useState('auto'); // 'auto', 'graph', 'statemachine'
+    const [viewMode, setViewMode] = React.useState('auto');
 
-    // Auto mode logic: show interpolation if keyframe selected, otherwise state machine
+    // Local state for new condition
+    const [newConditionInputId, setNewConditionInputId] = React.useState('');
+    const [newConditionOperator, setNewConditionOperator] = React.useState('==');
+    const [newConditionValue, setNewConditionValue] = React.useState('');
+
     const effectiveMode = React.useMemo(() => {
         if (viewMode === 'graph') return 'graph';
         if (viewMode === 'statemachine') return 'statemachine';
-        // Auto mode
         if (selectedKeyframe) return 'interpolation';
         return 'statemachine';
     }, [viewMode, selectedKeyframe]);
 
+    const handleAddCondition = () => {
+        if (!newConditionInputId) return;
+        const input = smInputs.find(i => i.id === Number(newConditionInputId));
+        if (!input) return;
+
+        const newCond = {
+            inputId: input.id,
+            operator: input.type === 'trigger' ? 'fires' : newConditionOperator,
+            value: input.type === 'boolean' ? (newConditionValue === 'true' || newConditionValue === true) : newConditionValue
+        };
+
+        const currentConditions = selectedTransition.conditions || [];
+        onUpdateTransition(selectedTransition.id, {
+            conditions: [...currentConditions, newCond]
+        });
+        setNewConditionInputId('');
+        setNewConditionValue('');
+    };
+
+    const handleRemoveCondition = (index) => {
+        const currentConditions = selectedTransition.conditions || [];
+        const newConditions = [...currentConditions];
+        newConditions.splice(index, 1);
+        onUpdateTransition(selectedTransition.id, { conditions: newConditions });
+    };
+
     return (
-        <div style={{ flex: '0 0 30%', display: 'flex', flexDirection: 'column', background: 'var(--bg-app)', overflow: 'hidden', borderLeft: '1px solid var(--border-color)' }}>
+        <div className="timeline-right">
             {/* Mode Switcher */}
-            <div style={{
-                padding: '4px 8px',
-                borderBottom: '1px solid var(--border-color)',
-                display: 'flex',
-                gap: '4px',
-                background: 'var(--bg-panel)'
-            }}>
-                <button
-                    className={`btn ${viewMode === 'auto' ? 'active' : ''}`}
-                    onClick={() => setViewMode('auto')}
-                    style={{
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        background: viewMode === 'auto' ? 'var(--bg-input)' : 'transparent'
-                    }}
-                    title="Auto-switch between Interpolation and State Machine"
-                >
-                    Auto
-                </button>
-                <button
-                    className={`btn ${viewMode === 'graph' ? 'active' : ''}`}
-                    onClick={() => setViewMode('graph')}
-                    style={{
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        background: viewMode === 'graph' ? 'var(--bg-input)' : 'transparent'
-                    }}
-                    title="Graph Editor"
-                >
-                    <Icons.TrendingUp size={12} style={{ marginRight: '4px' }} /> Graph
-                </button>
-                <button
-                    className={`btn ${viewMode === 'statemachine' ? 'active' : ''}`}
-                    onClick={() => setViewMode('statemachine')}
-                    style={{
-                        padding: '4px 8px',
-                        fontSize: '10px',
-                        background: viewMode === 'statemachine' ? 'var(--bg-input)' : 'transparent'
-                    }}
-                    title="State Machine Inputs"
-                >
-                    <Icons.GitBranch size={12} style={{ marginRight: '4px' }} /> SM
-                </button>
+            <div className="panel-header" style={{ justifyContent: 'space-between', padding: '0 8px' }}>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                    <button className={`btn ${viewMode === 'auto' ? 'active' : ''}`} onClick={() => setViewMode('auto')} style={{ fontSize: '10px', padding: '4px 8px' }}>Auto</button>
+                    <button className={`btn ${viewMode === 'graph' ? 'active' : ''}`} onClick={() => setViewMode('graph')} style={{ fontSize: '10px', padding: '4px 8px' }}><Icons.TrendingUp size={12} style={{ marginRight: '4px' }} /> Graph</button>
+                    <button className={`btn ${viewMode === 'statemachine' ? 'active' : ''}`} onClick={() => setViewMode('statemachine')} style={{ fontSize: '10px', padding: '4px 8px' }}><Icons.GitBranch size={12} style={{ marginRight: '4px' }} /> SM</button>
+                </div>
             </div>
 
             {/* Content Area */}
-            <div style={{ flex: 1, overflow: 'auto' }}>
+            <div style={{ flex: 1, overflow: 'auto', padding: '0' }}>
                 {effectiveMode === 'interpolation' && selectedKeyframe ? (
                     <InterpolationPanel selectedKeyframe={selectedKeyframe} onUpdateKeyframe={addKeyframe} />
                 ) : effectiveMode === 'graph' ? (
-                    GraphEditor ? (
-                        <GraphEditor
-                            keyframes={keyframes}
-                            shapes={shapes}
-                            selection={selection}
-                            onUpdateKeyframe={addKeyframe}
-                            currentTime={currentTime}
-                        />
-                    ) : (
-                        <div style={{ padding: '12px', color: 'var(--text-secondary)', fontSize: '11px' }}>
-                            Graph Editor not available
-                        </div>
-                    )
+                    GraphEditor ? <GraphEditor keyframes={keyframes} shapes={shapes} selection={selection} onUpdateKeyframe={addKeyframe} currentTime={currentTime} /> : <div style={{ padding: '16px' }}>Graph Editor not available</div>
                 ) : selectedTransition ? (
-                    <div style={{ padding: '12px', color: 'var(--text-primary)' }}>
-                        <div style={{ paddingBottom: '8px', borderBottom: '1px solid var(--border-color)', marginBottom: '12px', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                            TRANSITION
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                <span style={{ fontSize: '11px' }}>Condition</span>
-                                <select
-                                    value={selectedTransition.condition || ''}
-                                    onChange={(e) => onUpdateTransition(selectedTransition.id, { condition: e.target.value })}
-                                    style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '4px', fontSize: '11px', borderRadius: '4px' }}
-                                >
-                                    <option value="">None (Immediate)</option>
-                                    {smInputs && smInputs.map(input => (
-                                        <option key={input.id} value={input.name}>{input.name}</option>
-                                    ))}
-                                </select>
+                    <div className="panel-content">
+                        <div className="panel-title">TRANSITION</div>
+                        <div>
+                            <div style={{ fontSize: '11px', marginBottom: '8px', fontWeight: 600 }}>Conditions</div>
+                            {(!selectedTransition?.conditions || selectedTransition?.conditions?.length === 0) && (
+                                <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontStyle: 'italic', marginBottom: '8px' }}>No conditions (Immediate)</div>
+                            )}
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+                                {(selectedTransition?.conditions || []).map((cond, idx) => {
+                                    const input = smInputs.find(i => i.id === cond.inputId);
+                                    return (
+                                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-input)', padding: '6px', borderRadius: '4px', fontSize: '11px' }}>
+                                            <span style={{ flex: 1, fontWeight: 600 }}>{input ? input.name : 'Unknown'}</span>
+                                            <span style={{ color: 'var(--text-secondary)' }}>{cond.operator}</span>
+                                            {input && input.type !== 'trigger' && <span style={{ fontWeight: 600 }}>{String(cond.value)}</span>}
+                                            <button className="btn" style={{ padding: '2px', marginLeft: 'auto', color: '#f87171' }} onClick={() => handleRemoveCondition(idx)}><Icons.Trash size={12} /></button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                <Select
+                                    value={newConditionInputId}
+                                    onChange={(val) => {
+                                        setNewConditionInputId(val);
+                                        const inp = smInputs.find(i => i.id === Number(val));
+                                        if (inp) {
+                                            if (inp.type === 'trigger') setNewConditionOperator('fires');
+                                            else if (inp.type === 'boolean') { setNewConditionOperator('=='); setNewConditionValue('true'); }
+                                            else { setNewConditionOperator('=='); setNewConditionValue('0'); }
+                                        }
+                                    }}
+                                    placeholder="Select Input..."
+                                    options={smInputs.map(i => ({ value: i.id, label: `${i.name} (${i.type})` }))}
+                                />
+                                {newConditionInputId && (
+                                    <div style={{ display: 'flex', gap: '4px' }}>
+                                        <button className="btn primary" onClick={handleAddCondition} style={{ padding: '4px 8px', width: '100%' }}>Add Condition</button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
                 ) : (
                     <>
-                        <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color)', fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                            STATE MACHINE
+                        <div className="panel-header" style={{ borderBottom: '1px solid var(--border-color)', background: 'transparent' }}>
+                            <div className="panel-title">STATE MACHINE INPUTS</div>
                         </div>
-                        <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                            {/* Inputs Section */}
-                            <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)' }}>Inputs</span>
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <button className="btn" onClick={() => handleAddInput('boolean')} title="Add Boolean" style={{ padding: '2px' }}><Icons.ToggleLeft size={12} /></button>
-                                        <button className="btn" onClick={() => handleAddInput('number')} title="Add Number" style={{ padding: '2px' }}><Icons.Hash size={12} /></button>
+                        <div className="panel-content">
+                            <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                                <button className="btn" onClick={() => handleAddInput('boolean')} title="Add Boolean" style={{ flex: 1 }}><Icons.ToggleLeft size={12} /> Bool</button>
+                                <button className="btn" onClick={() => handleAddInput('number')} title="Add Number" style={{ flex: 1 }}><Icons.Hash size={12} /> Num</button>
+                                <button className="btn" onClick={() => handleAddInput('trigger')} title="Add Trigger" style={{ flex: 1 }}><Icons.Zap size={12} /> Trig</button>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {smInputs && smInputs.map(input => (
+                                    <div key={input.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-input)', padding: '6px 10px', borderRadius: '4px' }}>
+                                        <span style={{ fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 500 }}>
+                                            {input.type === 'trigger' ? <Icons.Zap size={12} color="var(--accent)" /> :
+                                                input.type === 'boolean' ? <Icons.ToggleLeft size={12} /> : <Icons.Hash size={12} />}
+                                            {input.name}
+                                        </span>
+                                        {input.type === 'boolean' ? (
+                                            <input type="checkbox" checked={input.value} onChange={(e) => handleUpdateInput(input.id, e.target.checked)} />
+                                        ) : input.type === 'number' ? (
+                                            <input type="number" value={input.value} onChange={(e) => handleUpdateInput(input.id, Number(e.target.value))} style={{ width: '50px', background: 'transparent', border: '1px solid var(--border-color)', borderRadius: '3px', color: 'var(--text-primary)', textAlign: 'right', padding: '2px 4px' }} />
+                                        ) : (
+                                            <button className="btn" onClick={() => fireTrigger(input.id)} style={{ fontSize: '10px', padding: '2px 8px', background: 'var(--accent)', color: 'white', border: 'none' }}>Fire</button>
+                                        )}
                                     </div>
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                    {smInputs && smInputs.map(input => (
-                                        <div key={input.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-input)', padding: '4px 8px', borderRadius: '4px' }}>
-                                            <span style={{ fontSize: '11px' }}>{input.name}</span>
-                                            {input.type === 'boolean' ? (
-                                                <input
-                                                    type="checkbox"
-                                                    checked={input.value}
-                                                    onChange={(e) => handleUpdateInput(input.id, e.target.checked)}
-                                                />
-                                            ) : (
-                                                <input
-                                                    type="number"
-                                                    value={input.value}
-                                                    onChange={(e) => handleUpdateInput(input.id, Number(e.target.value))}
-                                                    style={{ width: '40px', background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'right' }}
-                                                />
-                                            )}
-                                        </div>
-                                    ))}
-                                    {(!smInputs || smInputs.length === 0) && (
-                                        <div style={{ fontSize: '10px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>No inputs defined</div>
-                                    )}
-                                </div>
+                                ))}
+                                {(!smInputs || smInputs.length === 0) && <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic', textAlign: 'center', padding: '12px' }}>No inputs defined. Add one above.</div>}
                             </div>
                         </div>
                     </>
@@ -318,37 +322,44 @@ const StateMachinePanel = React.memo(({ selectedKeyframe, selectedTransition, sm
 const Timeline = ({
     isPlaying, setIsPlaying, currentTime, setCurrentTime,
     duration, setDuration, shapes, selection,
-    keyframes, addKeyframe, deleteKeyframe,
+    keyframes, addKeyframe, deleteKeyframe, updateKeyframeTime,
     animations, activeAnimationId, setActiveAnimationId, addAnimation,
     isVisible, onToggle,
     smInputs, setSmInputs,
-    selectedTransition, onUpdateTransition
+    selectedTransition, onUpdateTransition, showConfirm
 }) => {
     const [isDraggingPlayhead, setIsDraggingPlayhead] = React.useState(false);
+    const [draggingKeyframeId, setDraggingKeyframeId] = React.useState(null);
     const [selectedKeyframe, setSelectedKeyframe] = React.useState(null);
     const tracksRef = React.useRef(null);
 
     // Constants
-    const LABEL_WIDTH = 200;
-    const RULER_HEIGHT = 24;
+    const LABEL_WIDTH = 220; // Increased to match CSS
+
 
     const handlePlayheadMouseDown = (e) => {
         e.stopPropagation();
         setIsDraggingPlayhead(true);
     };
 
-    const calculateTimeFromEvent = (e) => {
+    const calculateTimeFromEvent = React.useCallback((e) => {
         if (!tracksRef.current) return 0;
         const rect = tracksRef.current.getBoundingClientRect();
         const trackWidth = rect.width;
         const x = Math.max(0, Math.min(e.clientX - rect.left, trackWidth));
         return (x / trackWidth) * duration;
-    };
+    }, [duration]);
 
     const handleScrub = React.useCallback((e) => {
         const newTime = calculateTimeFromEvent(e);
         setCurrentTime(Math.max(0, Math.min(newTime, duration)));
-    }, [duration, setCurrentTime]);
+    }, [duration, setCurrentTime, calculateTimeFromEvent]);
+
+    const handleKeyframeMouseDown = React.useCallback((e, kf) => {
+        // e.stopPropagation() is already called in KeyframeNode
+        setDraggingKeyframeId(kf.id);
+        setSelectedKeyframe(kf);
+    }, []);
 
     const handleTimelineMouseDown = React.useCallback((e) => {
         if (e.target.closest('.keyframe') || e.target.closest('.playhead-handle')) return;
@@ -357,18 +368,40 @@ const Timeline = ({
         handleScrub(e);
     }, [handleScrub]);
 
+    // Cleanup drag state on mouse up
+    const handleDragEnd = React.useCallback(() => {
+        setIsDraggingPlayhead(false);
+        setDraggingKeyframeId(null);
+    }, []);
+
     React.useEffect(() => {
         if (isDraggingPlayhead) {
             const handleMouseMove = (e) => handleScrub(e);
-            const handleMouseUp = () => setIsDraggingPlayhead(false);
             window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('mouseup', handleDragEnd);
             return () => {
                 window.removeEventListener('mousemove', handleMouseMove);
-                window.removeEventListener('mouseup', handleMouseUp);
+                window.removeEventListener('mouseup', handleDragEnd);
             };
         }
-    }, [isDraggingPlayhead, handleScrub]);
+        if (draggingKeyframeId) {
+            const handleMouseMove = (e) => {
+                const newTime = calculateTimeFromEvent(e);
+                if (updateKeyframeTime) {
+                    updateKeyframeTime(draggingKeyframeId, newTime);
+                    // Also update current time to match while dragging? 
+                    // Users typically like to see the frame they are dragging to
+                    setCurrentTime(newTime);
+                }
+            };
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleDragEnd);
+            return () => {
+                window.removeEventListener('mousemove', handleMouseMove);
+                window.removeEventListener('mouseup', handleDragEnd);
+            };
+        }
+    }, [isDraggingPlayhead, draggingKeyframeId, handleScrub, handleDragEnd, calculateTimeFromEvent, updateKeyframeTime, setCurrentTime]);
 
     const handleAddKeyframeWithSelection = React.useCallback(() => {
         if (!selection || selection.length === 0) return;
@@ -391,7 +424,7 @@ const Timeline = ({
         });
     }, [selection, shapes, currentTime, addKeyframe]);
 
-    // State Machine Input Handlers wrappers
+    // ... State Machine Input Handlers wrappers ...
     const handleAddInput = React.useCallback((type) => {
         if (!setSmInputs) return;
         const newInput = {
@@ -411,9 +444,9 @@ const Timeline = ({
     const hasSelection = selection && selection.length > 0;
 
     return (
-        <div className="timeline" style={{ display: 'flex', flexDirection: 'row', height: 'var(--timeline-height)', userSelect: 'none' }}>
+        <div className="timeline">
             {/* Left Side - Timeline Tracks */}
-            <div style={{ flex: '0 0 70%', display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-color)', position: 'relative' }}>
+            <div className="timeline-left">
                 <TimelineHeader
                     activeAnimationId={activeAnimationId}
                     setActiveAnimationId={setActiveAnimationId}
@@ -433,8 +466,6 @@ const Timeline = ({
                     duration={duration}
                     handleTimelineMouseDown={handleTimelineMouseDown}
                     LABEL_WIDTH={LABEL_WIDTH}
-                    RULER_HEIGHT={RULER_HEIGHT}
-                    currentTime={currentTime}
                 />
 
                 <TimelineTracks
@@ -450,13 +481,17 @@ const Timeline = ({
                     LABEL_WIDTH={LABEL_WIDTH}
                     tracksRef={tracksRef}
                     handleTimelineMouseDown={handleTimelineMouseDown}
+                    onKeyframeMouseDown={handleKeyframeMouseDown}
+                    showConfirm={showConfirm}
                 />
 
-                {/* Playhead Handle Overlay - Positioned relative to tracks area left side? No, relative to container */}
-                <div style={{ position: 'absolute', top: '32px', left: `${LABEL_WIDTH}px`, right: 0, height: `${RULER_HEIGHT}px`, pointerEvents: 'none' }}>
-                    <div className="playhead-handle" style={{ position: 'absolute', left: `${(currentTime / duration) * 100}%`, top: 0, bottom: 0, width: '1px', background: 'var(--accent)', pointerEvents: 'all', cursor: 'ew-resize' }} onMouseDown={handlePlayheadMouseDown}>
-                        <div style={{ width: '11px', height: '11px', background: 'var(--accent)', transform: 'translate(-5px, 0) rotate(45deg)', marginTop: '-5px', borderRadius: '2px 2px 2px 0' }} />
-                    </div>
+                {/* Playhead Handle Overlay - Positioned securely over the tracks/ruler */}
+                <div className="playhead-handle-container">
+                    <div
+                        className="playhead-handle"
+                        style={{ left: `${(currentTime / duration) * 100}%` }}
+                        onMouseDown={handlePlayheadMouseDown}
+                    />
                 </div>
             </div>
 
@@ -472,6 +507,7 @@ const Timeline = ({
                 shapes={shapes}
                 selection={selection}
                 currentTime={currentTime}
+                fireTrigger={fireTrigger}
             />
         </div>
     );

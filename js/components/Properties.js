@@ -2,6 +2,7 @@
 
 const React = window.React;
 const Icons = window.Icons;
+const Select = window.Select;
 
 const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }) => {
     const selectedShapes = shapes.filter(s => selection.includes(s.id));
@@ -333,27 +334,20 @@ const Properties = ({ selection, shapes, updateShape, updateShapes, canvasSize }
                     <div className="property-row">
                         <div className="input-group" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
                             <label style={{ marginBottom: '4px', width: 'auto' }}>Blend Mode</label>
-                            <select
+                            <Select
                                 value={getValue('blendMode') || 'normal'}
-                                onChange={(e) => handleChange('blendMode', e.target.value)}
-                                style={{
-                                    background: 'var(--bg-app)',
-                                    border: '1px solid var(--border-color)',
-                                    color: 'var(--text-primary)',
-                                    padding: '4px 8px',
-                                    borderRadius: '4px',
-                                    fontSize: '12px'
-                                }}
-                            >
-                                <option value="normal">Normal</option>
-                                <option value="multiply">Multiply</option>
-                                <option value="screen">Screen</option>
-                                <option value="overlay">Overlay</option>
-                                <option value="darken">Darken</option>
-                                <option value="lighten">Lighten</option>
-                                <option value="color-dodge">Color Dodge</option>
-                                <option value="color-burn">Color Burn</option>
-                            </select>
+                                onChange={(val) => handleChange('blendMode', val)}
+                                options={[
+                                    { value: 'normal', label: 'Normal' },
+                                    { value: 'multiply', label: 'Multiply' },
+                                    { value: 'screen', label: 'Screen' },
+                                    { value: 'overlay', label: 'Overlay' },
+                                    { value: 'darken', label: 'Darken' },
+                                    { value: 'lighten', label: 'Lighten' },
+                                    { value: 'color-dodge', label: 'Color Dodge' },
+                                    { value: 'color-burn', label: 'Color Burn' }
+                                ]}
+                            />
                         </div>
                     </div>
                 </div>

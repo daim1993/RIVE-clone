@@ -50,12 +50,15 @@ const StateMachineEditor = ({ states, transitions, onAddState, onAddTransition, 
 
     const handleConnectEnd = (e, stateId) => {
         e.stopPropagation();
+        // Prevent transitions TO 'Any State' or 'Entry' (Entry is source only usually)
+        if (stateId === 'any' || stateId === 'entry') return;
+
         if (connectingNode && connectingNode !== stateId) {
             onAddTransition({
                 from: connectingNode,
                 to: stateId,
                 id: Date.now(),
-                condition: null
+                conditions: []
             });
         }
         setConnectingNode(null);
@@ -138,6 +141,11 @@ const StateMachineEditor = ({ states, transitions, onAddState, onAddTransition, 
                 {/* States */}
                 {states.map(state => {
                     const isSelected = selectedNodeId === state.id;
+                    let fill = '#3b82f6';
+                    if (state.name === 'Entry') fill = '#4ade80';
+                    else if (state.name === 'Exit') fill = '#f87171';
+                    else if (state.name === 'Any State') fill = '#a855f7';
+
                     return (
                         <g
                             key={state.id}
@@ -150,7 +158,7 @@ const StateMachineEditor = ({ states, transitions, onAddState, onAddTransition, 
                                 width="120"
                                 height="40"
                                 rx="4"
-                                fill={state.name === 'Entry' ? '#4ade80' : state.name === 'Exit' ? '#f87171' : '#3b82f6'}
+                                fill={fill}
                                 stroke={isSelected ? '#fff' : 'transparent'}
                                 strokeWidth={isSelected ? 2 : 0}
                                 fillOpacity="0.8"

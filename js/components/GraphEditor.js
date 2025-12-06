@@ -1,5 +1,6 @@
 const React = window.React;
 const Icons = window.Icons;
+const Select = window.Select;
 
 /**
  * GraphEditor - Bezier curve editor for keyframe interpolation
@@ -225,25 +226,19 @@ const GraphEditor = ({ keyframes, shapes, selection, onUpdateKeyframe, currentTi
             }}>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>GRAPH EDITOR</span>
-                    <select
+                    <Select
                         value={selectedProperty}
-                        onChange={(e) => setSelectedProperty(e.target.value)}
-                        style={{
-                            background: 'var(--bg-input)',
-                            color: 'var(--text-primary)',
-                            border: '1px solid var(--border-color)',
-                            padding: '4px 8px',
-                            fontSize: '11px',
-                            borderRadius: '4px'
-                        }}
-                    >
-                        <option value="x">Position X</option>
-                        <option value="y">Position Y</option>
-                        <option value="rotation">Rotation</option>
-                        <option value="opacity">Opacity</option>
-                        <option value="width">Width</option>
-                        <option value="height">Height</option>
-                    </select>
+                        onChange={(val) => setSelectedProperty(val)}
+                        options={[
+                            { value: 'x', label: 'Position X' },
+                            { value: 'y', label: 'Position Y' },
+                            { value: 'rotation', label: 'Rotation' },
+                            { value: 'opacity', label: 'Opacity' },
+                            { value: 'width', label: 'Width' },
+                            { value: 'height', label: 'Height' }
+                        ]}
+                        style={{ minWidth: '100px' }}
+                    />
                 </div>
                 <div style={{ display: 'flex', gap: '4px' }}>
                     <button

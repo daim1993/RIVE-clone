@@ -36,7 +36,8 @@ const TimelineWrapper = () => {
         isTimelineVisible, setIsTimelineVisible, isPlaying, setIsPlaying, currentTime, setCurrentTime,
         duration, setDuration, shapes, selection, keyframes, addKeyframe, deleteKeyframe,
         animations, activeAnimationId, setActiveAnimationId, addAnimation,
-        smInputs, setSmInputs, smTransitions, handleUpdateTransition, selectedTransitionId
+        smInputs, setSmInputs, smTransitions, handleUpdateTransition, selectedTransitionId,
+        updateKeyframeTime, fireTrigger, showConfirm
     } = useContext(AppContext);
     const Timeline = window.Timeline;
 
@@ -59,11 +60,14 @@ const TimelineWrapper = () => {
             activeAnimationId={activeAnimationId}
             setActiveAnimationId={setActiveAnimationId}
             addAnimation={addAnimation}
+            updateKeyframeTime={updateKeyframeTime}
             // State Machine Props
             smInputs={smInputs}
             setSmInputs={setSmInputs}
             selectedTransition={smTransitions.find(t => t.id === selectedTransitionId)}
             onUpdateTransition={handleUpdateTransition}
+            fireTrigger={fireTrigger}
+            showConfirm={showConfirm}
         />
     );
 };
@@ -73,7 +77,7 @@ const CanvasWrapper = () => {
         shapes, selection, setSelection, tool, addShape, updateShape, updateShapes, recordHistory,
         canvasSize, setCanvasSize, mode, activeView, setActiveView, animations,
         smStates, smTransitions, handleAddState, handleAddTransition, setSelectedNodeId, selectedNodeId,
-        setSelectedTransitionId, selectedTransitionId
+        setSelectedTransitionId, selectedTransitionId, updateKeyframeTime
     } = useContext(AppContext);
 
     const Canvas = window.Canvas;
@@ -216,20 +220,209 @@ const App = () => {
     const [smStates, setSmStates] = useState([
         { id: 'entry', name: 'Entry', x: 50, y: 50 },
         { id: 'exit', name: 'Exit', x: 500, y: 50 },
+        { id: 'any', name: 'Any State', x: 50, y: 300 },
         { id: 'idle', name: 'Idle', x: 250, y: 150, animationId: 1 },
         { id: 'run', name: 'Run', x: 250, y: 300, animationId: null }
     ]);
     const [smTransitions, setSmTransitions] = useState([
-        { id: 1, from: 'entry', to: 'idle', condition: null }
+        { id: 1, from: 'entry', to: 'idle', conditions: [] }
     ]);
     const [smInputs, setSmInputs] = useState([
         { id: 1, name: 'isHovering', type: 'boolean', value: false },
-        { id: 2, name: 'speed', type: 'number', value: 0 }
+        { id: 2, name: 'speed', type: 'number', value: 0 },
+        { id: 3, name: 'jump', type: 'trigger', value: false }
     ]);
     const [currentStateId, setCurrentStateId] = useState('entry');
     const [selectedTransitionId, setSelectedTransitionId] = useState(null);
     const [selectedNodeId, setSelectedNodeId] = useState(null);
 
+    // Modal State
+    const [modalConfig, setModalConfig] = useState({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: null,
+        onCancel: null,
+        type: 'confirm'
+    });
+
+    const showConfirm = (message, onConfirm, title = 'Confirm', onCancel = null) => {
+        setModalConfig({
+            isOpen: true,
+            title,
+            message,
+            onConfirm: () => {
+                if (onConfirm) onConfirm();
+                setModalConfig(prev => ({ ...prev, isOpen: false }));
+            },
+            onCancel: () => {
+                if (onCancel) onCancel();
+                setModalConfig(prev => ({ ...prev, isOpen: false }));
+            },
+            type: 'confirm'
+        });
+    };
+
+    const showAlert = (message, title = 'Alert') => {
+        setModalConfig({
+            isOpen: true,
+            title,
+            message,
+            onConfirm: () => setModalConfig(prev => ({ ...prev, isOpen: false })),
+            onCancel: null,
+            type: 'alert'
+        });
+    };
+
+    // Trigger Logic
+    const fireTrigger = (inputId) => {
+        setSmInputs(prev => prev.map(i => i.id === inputId ? { ...i, value: true } : i));
+    };
+
+    // Animation Loop
+    useEffect(() => {
+        let animationFrame;
+        let start = Date.now() - currentTime;
+
+        const loop = () => {
+            if (!isPlaying) return;
+
+            // State Machine Logic
+            // 0. Resolve Keyframes/Animation for CURRENT state (before transition? or after? Rive checks transitions first)
+
+            // 1. Check Transitions
+            // Priority: Any State -> Current State
+            const anyStateTransitions = smTransitions.filter(t => t.from === 'any');
+            const currentStateTransitions = smTransitions.filter(t => t.from === currentStateId);
+            const possibleTransitions = [...anyStateTransitions, ...currentStateTransitions];
+
+            let transitionTaken = null;
+
+            for (const t of possibleTransitions) {
+                // Determine if transition should be taken
+                if (!t.conditions || t.conditions.length === 0) {
+                    // Start/Immediate transition? Only valid for Entry really, or usually requires 'exit time' (not implemented yet).
+                    // For now, if from 'entry' and no condition, take it.
+                    if (t.from === 'entry') {
+                        transitionTaken = t;
+                        break;
+                    }
+                    continue;
+                }
+
+                // Check ALL conditions
+                const allMet = t.conditions.every(cond => {
+                    const input = smInputs.find(i => i.id === cond.inputId);
+                    if (!input) return false;
+
+                    switch (input.type) {
+                        case 'boolean':
+                            return input.value === (cond.value === 'true' || cond.value === true);
+                        case 'trigger':
+                            return input.value === true;
+                        case 'number':
+                            const val = Number(cond.value);
+                            const currentVal = Number(input.value);
+                            switch (cond.operator) {
+                                case '==': return currentVal === val;
+                                case '>': return currentVal > val;
+                                case '<': return currentVal < val;
+                                case '>=': return currentVal >= val;
+                                case '<=': return currentVal <= val;
+                                default: return false;
+                            }
+                        default: return false;
+                    }
+                });
+
+                if (allMet) {
+                    transitionTaken = t;
+                    break;
+                }
+            }
+
+            if (transitionTaken) {
+                setCurrentStateId(transitionTaken.to);
+                start = Date.now(); // Reset time for new state
+
+                // Consumed triggers? 
+                // We typically consume triggers involved in the transition.
+                // Or we reset ALL triggers at end of frame? Rive resets triggers at end of frame or after evaluation.
+                // We'll reset triggers that were TRUE.
+                // Actually, due to React state setting in loop, we need to be careful.
+                // `fireTrigger` sets state. If we reset here, we might loop?
+                // For now, let's assume we can setSmInputs here safely if we use functional update?
+                // No, calling setState in loop is bad if it causes re-render loop.
+                // BUT `loop` is inside useEffect dependency on `isPlaying`.
+                // We should only reset triggers if we detect they are true.
+
+                // ideally we handle trigger consumption.
+            }
+
+            // Cleanup Triggers (if any were true, set them to false)
+            // This logic is tricky in React loop. 
+            // We'll rely on a separate effect or just modify the Ref if possible? 
+            // For now, let's just NOT reset inside the loop to avoid infinite re-renders.
+            // We will implement a 'consumeTrigger' that updates the state once.
+
+            if (transitionTaken) {
+                // Check if any conditions were triggers and reset them
+                const triggerConditions = transitionTaken.conditions.filter(c => {
+                    const inp = smInputs.find(i => i.id === c.inputId);
+                    return inp && inp.type === 'trigger';
+                });
+                if (triggerConditions.length > 0) {
+                    setSmInputs(prev => prev.map(inp => {
+                        if (inp.type === 'trigger' && inp.value === true) {
+                            return { ...inp, value: false };
+                        }
+                        return inp;
+                    }));
+                }
+            }
+
+
+            // 2. Get Active Animation from Current State
+            const currentState = smStates.find(s => s.id === currentStateId);
+            const currentAnimId = currentState?.animationId;
+            const currentAnim = animations.find(a => a.id === currentAnimId);
+
+            if (!currentAnim) {
+                // Still need to tick triggers?
+                if (!transitionTaken) {
+                    // If we didn't transition, we might still want to clear triggers? 
+                    // Triggers usually persist until consumed by a transition? 
+                    // Or they last 1 frame? Rive triggers are "Fire" and stay active until consumed or explicitly reset?
+                    // Usually "Fire" means "Evaluate in next update".
+                }
+                animationFrame = requestAnimationFrame(loop);
+                return;
+            }
+
+            const now = Date.now();
+            let newTime = (now - start);
+            const animDuration = currentAnim.duration || 5000;
+
+            if (newTime >= animDuration) {
+                newTime = 0;
+                start = now;
+            }
+
+            setCurrentTime(newTime);
+            applyAnimationAt(newTime, currentAnim);
+
+            animationFrame = requestAnimationFrame(loop);
+        };
+
+        if (isPlaying) {
+            start = Date.now() - currentTime;
+            loop();
+        } else {
+            cancelAnimationFrame(animationFrame);
+        }
+
+        return () => cancelAnimationFrame(animationFrame);
+    }, [isPlaying, activeAnimationId, animations, smStates, smTransitions, smInputs, currentStateId]);
     // Layout State - Separate states for design and animate modes
     const defaultDesignLayout = {
         id: 'root',
@@ -412,111 +605,83 @@ const App = () => {
         shapesRef.current = shapes;
     }, [shapes]);
 
-    // Animation Loop
-    useEffect(() => {
-        let animationFrame;
-        let start = Date.now() - currentTime;
+    // Interpolation Logic
+    const applyAnimationAt = (time, anim) => {
+        if (!anim) return;
 
-        const loop = () => {
-            if (!isPlaying) return;
+        const currentKeyframes = anim.keyframes || [];
+        const updates = [];
+        const currentShapes = shapesRef.current; // Use ref for latest shapes without triggering re-renders
 
-            // State Machine Logic
-            // 1. Check Transitions
-            const possibleTransitions = smTransitions.filter(t => t.from === currentStateId);
-            for (const t of possibleTransitions) {
-                if (!t.condition) {
-                    // Immediate transition (e.g. from Entry)
-                    setCurrentStateId(t.to);
-                    start = Date.now(); // Reset time for new state
-                    break;
+        currentShapes.forEach(shape => {
+            const shapeKeyframes = currentKeyframes
+                .filter(kf => kf.shapeId === shape.id)
+                .sort((a, b) => a.time - b.time);
+
+            if (shapeKeyframes.length >= 1) {
+                // Find prev and next keyframes
+                let prevKf = null;
+                let nextKf = null;
+
+                // If time is before first keyframe, clamp to first
+                if (time <= shapeKeyframes[0].time) {
+                    prevKf = shapeKeyframes[0];
+                    nextKf = shapeKeyframes[0];
                 }
-
-                const input = smInputs.find(i => i.name === t.condition);
-                if (input && input.value === true) {
-                    setCurrentStateId(t.to);
-                    start = Date.now();
-                    break;
+                // If time is after last keyframe, clamp to last
+                else if (time >= shapeKeyframes[shapeKeyframes.length - 1].time) {
+                    prevKf = shapeKeyframes[shapeKeyframes.length - 1];
+                    nextKf = shapeKeyframes[shapeKeyframes.length - 1];
                 }
-            }
-
-            // 2. Get Active Animation from Current State
-            const currentState = smStates.find(s => s.id === currentStateId);
-            const currentAnimId = currentState?.animationId;
-            const currentAnim = animations.find(a => a.id === currentAnimId);
-
-            if (!currentAnim) {
-                // No animation for this state, just keep loop running
-                animationFrame = requestAnimationFrame(loop);
-                return;
-            }
-
-            const now = Date.now();
-            let newTime = (now - start);
-            const animDuration = currentAnim.duration || 5000;
-
-            if (newTime >= animDuration) {
-                newTime = 0;
-                start = now;
-            }
-
-            setCurrentTime(newTime);
-
-            // Interpolate shapes based on keyframes of CURRENT animation
-            const currentKeyframes = currentAnim.keyframes || [];
-            const updates = [];
-            const currentShapes = shapesRef.current;
-
-            currentShapes.forEach(shape => {
-                const shapeKeyframes = currentKeyframes
-                    .filter(kf => kf.shapeId === shape.id)
-                    .sort((a, b) => a.time - b.time);
-
-                if (shapeKeyframes.length >= 2) {
-                    let prevKf = null;
-                    let nextKf = null;
-
+                // Interpolate
+                else {
                     for (let i = 0; i < shapeKeyframes.length - 1; i++) {
-                        if (newTime >= shapeKeyframes[i].time && newTime < shapeKeyframes[i + 1].time) {
+                        if (time >= shapeKeyframes[i].time && time < shapeKeyframes[i + 1].time) {
                             prevKf = shapeKeyframes[i];
                             nextKf = shapeKeyframes[i + 1];
                             break;
                         }
                     }
-
-                    if (prevKf && nextKf) {
-                        let progress = (newTime - prevKf.time) / (nextKf.time - prevKf.time);
-                        const type = prevKf.interpolation || 'linear';
-                        if (type && Easing[type]) {
-                            progress = Easing[type](progress);
-                        }
-
-                        const interpolated = {};
-                        Object.keys(prevKf.properties).forEach(key => {
-                            interpolated[key] = prevKf.properties[key] +
-                                (nextKf.properties[key] - prevKf.properties[key]) * progress;
-                        });
-
-                        updates.push({ id: shape.id, props: interpolated });
-                    }
                 }
-            });
 
-            if (updates.length > 0) {
-                updateShapes(updates);
+                if (prevKf && nextKf) {
+                    let progress = 0;
+                    if (nextKf.time !== prevKf.time) {
+                        progress = (time - prevKf.time) / (nextKf.time - prevKf.time);
+                    }
+
+                    const type = prevKf.interpolation || 'linear';
+                    if (type && Easing[type]) {
+                        progress = Easing[type](progress);
+                    }
+
+                    const interpolated = {};
+                    // Check properties present in prevKf to interpolate
+                    // If property is missing in nextKf, we should probably just use prevKf value? 
+                    // For simplicity, we assume consistent properties for now or handle missing
+                    Object.keys(prevKf.properties).forEach(key => {
+                        const startVal = prevKf.properties[key];
+                        const endVal = nextKf.properties[key] !== undefined ? nextKf.properties[key] : startVal;
+                        interpolated[key] = startVal + (endVal - startVal) * progress;
+                    });
+
+                    updates.push({ id: shape.id, props: interpolated });
+                }
             }
+        });
 
-            animationFrame = requestAnimationFrame(loop);
-        };
-
-        if (isPlaying) {
-            start = Date.now() - currentTime;
-            loop();
-        } else {
-            cancelAnimationFrame(animationFrame);
+        if (updates.length > 0) {
+            updateShapes(updates);
         }
+    };
 
-        return () => cancelAnimationFrame(animationFrame);
-    }, [isPlaying, keyframes, duration, smStates, smTransitions, smInputs, currentStateId]);
+    // Scrubbing Effect
+    useEffect(() => {
+        if (!isPlaying) {
+            const currentAnim = animations.find(a => a.id === activeAnimationId);
+            applyAnimationAt(currentTime, currentAnim);
+        }
+    }, [currentTime, isPlaying, activeAnimationId, animations, shapesRef]); // Added shapesRef to deps just in case, though not strictly needed as it's a ref
 
     const addShape = (shape) => {
         const newShape = { ...shape, id: Date.now() };
@@ -524,6 +689,8 @@ const App = () => {
         setShapes(newShapes);
         setSelection([newShape.id]);
         setTool('select');
+        // Record history not needed here if we rely on onUpdateEnd or specific actions? 
+        // But addShape is discrete.
         recordHistory(newShapes, animations);
     };
 
@@ -533,13 +700,29 @@ const App = () => {
 
     const updateShapes = (updates) => {
         setShapes(prevShapes => {
+            // Only create new array if there are actual changes
+            let changed = false;
             const newShapes = prevShapes.map(s => {
                 const update = updates.find(u => u.id === s.id);
-                return update ? { ...s, ...update.props } : s;
+                if (update) {
+                    // Check if props really changed to avoid loops? 
+                    // For now, just apply
+                    changed = true;
+                    return { ...s, ...update.props };
+                }
+                return s;
             });
-            return newShapes;
+            return changed ? newShapes : prevShapes;
         });
     };
+
+    // ... move/reparent handlers ...
+
+
+
+    // Expose updateKeyframeTime via Context or Props? 
+    // It's passed to TimelineWrapper eventually.
+
 
     const handleMoveShape = (draggedId, targetId, position) => {
         if (draggedId === targetId) return;
@@ -721,7 +904,9 @@ const App = () => {
             const newAnimations = animations.map(a => a.id === activeAnimationId ? { ...a, keyframes: newKeyframes } : a);
             recordHistory(shapes, newAnimations);
         } else {
-            const newKeyframes = [...keyframes, keyframe];
+            // Ensure ID
+            const newKf = { ...keyframe, id: keyframe.id || Date.now() + Math.random() };
+            const newKeyframes = [...keyframes, newKf];
             setKeyframes(newKeyframes);
             const newAnimations = animations.map(a => a.id === activeAnimationId ? { ...a, keyframes: newKeyframes } : a);
             recordHistory(shapes, newAnimations);
@@ -729,10 +914,20 @@ const App = () => {
     };
 
     const deleteKeyframe = (keyframe) => {
-        const newKeyframes = keyframes.filter(kf => kf !== keyframe);
+        const newKeyframes = keyframes.filter(kf => kf.id !== keyframe.id && kf !== keyframe);
         setKeyframes(newKeyframes);
         const newAnimations = animations.map(a => a.id === activeAnimationId ? { ...a, keyframes: newKeyframes } : a);
         recordHistory(shapes, newAnimations);
+    };
+
+    const updateKeyframeTime = (id, newTime) => {
+        const newKeyframes = keyframes.map(kf => {
+            if (kf.id === id) {
+                return { ...kf, time: Math.max(0, Math.min(newTime, duration)) };
+            }
+            return kf;
+        });
+        setKeyframes(newKeyframes);
     };
 
     const addAnimation = () => {
@@ -751,7 +946,7 @@ const App = () => {
     };
 
     const handleNew = () => {
-        if (confirm('Create a new project? This will clear your current work.')) {
+        showConfirm('Create a new project? This will clear your current work.', () => {
             setShapes([]);
             setSelection([]);
             setAnimations([{ id: 1, name: 'Idle', duration: 5000, keyframes: [] }]);
@@ -760,7 +955,26 @@ const App = () => {
             setHistory([]);
             setHistoryIndex(-1);
             recordHistory([], [{ id: 1, name: 'Idle', duration: 5000, keyframes: [] }]);
-        }
+
+            // Reset SM
+            setSmStates([
+                { id: 'entry', name: 'Entry', x: 50, y: 50 },
+                { id: 'exit', name: 'Exit', x: 500, y: 50 },
+                { id: 'any', name: 'Any State', x: 50, y: 300 },
+                { id: 'idle', name: 'Idle', x: 250, y: 150, animationId: 1 },
+                { id: 'run', name: 'Run', x: 250, y: 300, animationId: null }
+            ]);
+            setSmTransitions([
+                { id: 1, from: 'entry', to: 'idle', conditions: [] }
+            ]);
+            setSmInputs([
+                { id: 1, name: 'isHovering', type: 'boolean', value: false },
+                { id: 2, name: 'speed', type: 'number', value: 0 },
+                { id: 3, name: 'jump', type: 'trigger', value: false }
+            ]);
+            setCurrentStateId('entry');
+
+        }, 'Create New Project');
     };
 
     const handleFileImport = (e) => {
@@ -777,7 +991,7 @@ const App = () => {
                 setCurrentTime(0);
                 recordHistory(data.shapes || [], data.animations || []);
             } catch (error) {
-                alert('Error loading file: ' + error.message);
+                showAlert('Error loading file: ' + error.message, 'Import Error');
             }
         };
         reader.readAsText(file);
@@ -879,12 +1093,13 @@ const App = () => {
         canvasSize, setCanvasSize, mode, activeView, setActiveView, animations,
         smStates, smTransitions, smInputs, setSmInputs, handleUpdateTransition,
         handleAddState, handleAddTransition, setSelectedNodeId, selectedNodeId,
-        setSelectedTransitionId, selectedTransitionId,
+        setSelectedTransitionId, selectedTransitionId, fireTrigger,
         handleMoveShape, handleReparent, handleAddGroup,
         handleDistributeHorizontal, handleDistributeVertical,
         isTimelineVisible, setIsTimelineVisible, isPlaying, setIsPlaying, currentTime, setCurrentTime,
-        duration, setDuration, keyframes, addKeyframe, deleteKeyframe,
-        activeAnimationId, setActiveAnimationId, addAnimation
+        duration, setDuration, keyframes, addKeyframe, deleteKeyframe, updateKeyframeTime,
+        activeAnimationId, setActiveAnimationId, addAnimation,
+        showConfirm, showAlert
     };
 
     // Component Map for Layout - NOW STABLE
@@ -966,6 +1181,9 @@ const App = () => {
                 </div>
 
                 <Layout layout={layout} componentMap={componentMap} onLayoutChange={handleLayoutChange} />
+
+                {/* Modal */}
+                <Modal {...modalConfig} />
             </div>
         </AppContext.Provider>
     );

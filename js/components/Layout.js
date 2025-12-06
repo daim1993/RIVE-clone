@@ -123,10 +123,7 @@ const LayoutNode = ({ node, onResize, componentMap }) => {
         const Component = componentMap[node.component];
         return (
             <div className="layout-panel" style={{ flex: node.size }}>
-                <div className="panel-header">{node.title}</div>
-                <div className="panel-content-wrapper">
-                    {Component ? <Component {...node.props} /> : <div>Component {node.component} not found</div>}
-                </div>
+                {Component ? <Component {...node.props} /> : <div>Component {node.component} not found</div>}
             </div>
         );
     }
