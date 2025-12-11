@@ -10,5 +10,10 @@ if (!ReactDOM) {
     document.body.innerHTML = '<div style="color:white; padding:20px;">Error: App component not found. Check console for syntax errors in App.js.</div>';
 } else {
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<App />);
+    const ErrorBoundary = window.ErrorBoundary || (({ children }) => children);
+    root.render(
+        <ErrorBoundary>
+            <App />
+        </ErrorBoundary>
+    );
 }

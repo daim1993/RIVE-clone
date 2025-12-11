@@ -326,7 +326,7 @@ const Timeline = ({
     animations, activeAnimationId, setActiveAnimationId, addAnimation,
     isVisible, onToggle,
     smInputs, setSmInputs,
-    selectedTransition, onUpdateTransition, showConfirm
+    selectedTransition, onUpdateTransition, showConfirm, fireTrigger
 }) => {
     const [isDraggingPlayhead, setIsDraggingPlayhead] = React.useState(false);
     const [draggingKeyframeId, setDraggingKeyframeId] = React.useState(null);

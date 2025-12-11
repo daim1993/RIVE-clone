@@ -279,6 +279,32 @@ body {
     padding: 8px;
 }
 
+.property-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.property-group:last-child {
+    border-bottom: none;
+}
+
+.property-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.property-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
 /* Tree View (Hierarchy) */
 .tree-node {
     display: flex;
